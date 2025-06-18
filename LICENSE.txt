@@ -1,0 +1,19 @@
+ZURI_LMS – Proprietary License Agreement  
+Copyright © 2025 Kurt Jonathan. All Rights Reserved.
+
+ZURI_LMS is the proprietary and confidential property of Kurt Jonathan. It is a comprehensive Logistics Company Management System designed to support operations such as tire inspection, inventory tracking, dispatch management, vehicle scheduling, and enterprise reporting.
+
+This Software and its associated files may not be copied, modified, distributed, reverse-engineered, or used in any form, whole or in part, without the prior written permission of the copyright holder.
+
+This Software is provided “AS IS” without warranty of any kind, either expressed or implied. In no event shall the author be held liable for any claim, damages, or other liability arising from the use of the software.
+
+### You may NOT:
+- Use this software in production or development without a license
+- Share or sublicense the code or binaries
+- Modify or create derivative works
+- Upload this software to any public or private repositories
+
+### Contact for Licensing:
+Kurt Jonathan  
+📧 kurt@esoind.co.za  
+📍 South Africa  
