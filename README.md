@@ -39,7 +39,7 @@ A **limited open-source community edition** may be released in the future under 
 For demo access, licensing, or partnership opportunities:
 
 **Kurt Jonathan**  
-📧 [kurt@esoind.co.za](mailto:kurt@esoind.co.za)  
+📧 [esoken92@gmail.com](mailto:esoken92@gmail.com)
 📍 South Africa
 
 ---
