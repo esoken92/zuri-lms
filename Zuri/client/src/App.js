@@ -11,6 +11,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
 import { getCurrentUser } from './api';
+import ResetPasswordPage from './ResetPasswordPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -56,6 +57,7 @@ function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/report-page" element={<ReportPage />} />
             <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             {user.role === 'Administrator' && (
               <Route path="/admin-dashboard" element={<AdminDashboard user={user} onLogout={() => setUser(null)} />} />
             )}

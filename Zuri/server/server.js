@@ -7,6 +7,9 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const { Parser } = require('json2csv');
 const resetPasswordRoute = require('./routes/resetPassword');
+const resetConfirmRoute = require('./routes/resetConfirm');
+
+const allowedOrigins = ['http://localhost:3000', 'http://localhost:5000'];
 
 const app = express();
 const PORT = 5000;
@@ -21,7 +24,17 @@ const pool = new Pool({
 });
 
 // Middleware
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // Allow non-browser tools like Postman
+    const cleanedOrigin = origin.trim().toLowerCase();
+    if (allowedOrigins.includes(cleanedOrigin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS: ' + origin));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.static('uploads'));
 app.use(session({
@@ -30,7 +43,7 @@ app.use(session({
   saveUninitialized: false,
 }));
 app.use('/api/reset-password', resetPasswordRoute);
-
+app.use('/api/reset-password/confirm', resetConfirmRoute);
 
 // Auth Middleware
 function requireLogin(req, res, next) {
