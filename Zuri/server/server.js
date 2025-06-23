@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 const fs = require('fs');
 const { Parser } = require('json2csv');
+const resetPasswordRoute = require('./routes/resetPassword');
 
 const app = express();
 const PORT = 5000;
@@ -28,6 +29,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
 }));
+app.use('/api/reset-password', resetPasswordRoute);
+
 
 // Auth Middleware
 function requireLogin(req, res, next) {
