@@ -1,3 +1,4 @@
+// Zuri/client/src/App.js
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import InspectionForm from './components/InspectionForm';
@@ -12,6 +13,7 @@ import Dashboard from './Dashboard';
 import { getCurrentUser, logout } from './api';
 import ResetPasswordPage from './ResetPasswordPage';
 import Header from './components/Header';
+import UserSettingsPanel from './components/UserSettingsPanel';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -87,6 +89,7 @@ function App() {
                 />
               )}
               <Route path="/dashboard" element={<Dashboard user={user} onLogout={() => setUser(null)} />} />
+              <Route path="/settings" element={<UserSettingsPanel user={user} />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>
           ) : (
