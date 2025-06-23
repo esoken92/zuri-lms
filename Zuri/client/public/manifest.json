@@ -14,11 +14,24 @@
       "type": "image/png"
     }
   ],
-  "start_url": ".",
-  "scope": ".",
-  "id": "/zuri-app",
+  "start_url": "/",
+  "scope": "/",
+  "id": "/?source=pwa",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#1e90ff"
+  "theme_color": "#1e90ff",
+  "screenshots": [
+    {
+      "src": "screenshots/desktop-preview.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "screenshots/mobile-preview.png",
+      "sizes": "375x667",
+      "type": "image/png"
+    }
+  ]
 }

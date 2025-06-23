@@ -38,10 +38,19 @@ function InspectionForm({ onSubmit }) {
     setForm({ ...form, tirePosition: pos });
   };
 
+  const saveOffline = (report) => {
+    const existing = JSON.parse(localStorage.getItem("zuri-pending") || "[]");
+    existing.push(report);
+    localStorage.setItem("zuri-pending", JSON.stringify(existing));
+    alert("Saved offline. Will sync when you're back online.");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     let photoUrl = '';
-    if (form.photo) {
+
+    // Upload photo if online
+    if (form.photo && navigator.onLine) {
       const formData = new FormData();
       formData.append('photo', form.photo);
       try {
@@ -50,28 +59,46 @@ function InspectionForm({ onSubmit }) {
         });
         photoUrl = uploadRes.data.path;
       } catch (error) {
-        console.error('Upload failed:', error);
+        console.error('Photo upload failed. Proceeding without photo:', error);
       }
     }
 
-    const payload = { ...form, photo: photoUrl };
-    delete payload.photoFile;
-    axios.post(`${BASE_URL}/inspections`, payload)
-      .then(res => {
-        onSubmit && onSubmit();
-        setForm({
-          vehicleId: '',
-          vehicleType: 'Passenger Car',
-          tirePosition: '',
-          treadDepth: '',
-          pressure: '',
-          damage: '',
-          date: '',
-          photo: null,
-        });
-        setPreview(null);
-      })
-      .catch(err => console.error(err));
+    const payload = {
+      ...form,
+      photo: photoUrl || null,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Remove the file object from the payload
+    delete payload.photo;
+
+    if (navigator.onLine) {
+      try {
+        await axios.post(`${BASE_URL}/inspections`, payload);
+        alert("Inspection submitted online.");
+      } catch (err) {
+        console.warn("Online submit failed, saving offline:", err);
+        saveOffline(payload);
+      }
+    } else {
+      console.log("Offline – saving inspection locally.");
+      saveOffline(payload);
+    }
+
+    // Reset form
+    setForm({
+      vehicleId: '',
+      vehicleType: 'Passenger Car',
+      tirePosition: '',
+      treadDepth: '',
+      pressure: '',
+      damage: '',
+      date: '',
+      photo: null,
+    });
+    setPreview(null);
+
+    if (onSubmit) onSubmit();
   };
 
   return (
