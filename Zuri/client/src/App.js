@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import InspectionForm from './components/InspectionForm';
 import ReportPage from './pages/ReportPage';
 import Reports from './pages/Reports';
+import ScrapPage from './pages/ScrapPage';
 import SyncStatusBar from './components/SyncStatusBar';
 import useSyncPending from './hooks/useSyncPending';
 import AdminPanel from './pages/AdminPanel';
@@ -77,8 +78,10 @@ function App() {
         <Routes>
           {user ? (
             <>
-              <Route path="/" element={<InspectionForm />} />
+              <Route path="/" element={<Dashboard user={user} onLogout={() => setUser(null)} />} />
+              <Route path="/inspections" element={<InspectionForm />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/scrap" element={<ScrapPage user={user} />} />
               <Route path="/report-page" element={<ReportPage />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -88,7 +91,6 @@ function App() {
                   element={<AdminDashboard user={user} onLogout={() => setUser(null)} />}
                 />
               )}
-              <Route path="/dashboard" element={<Dashboard user={user} onLogout={() => setUser(null)} />} />
               <Route path="/settings" element={<UserSettingsPanel user={user} />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>

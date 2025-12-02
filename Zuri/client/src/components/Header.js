@@ -7,9 +7,10 @@ export default function Header({ user, onLogout, toggleDarkMode, isDark }) {
   const navigate = useNavigate();
 
   const tabs = [
-    { label: 'Dashboard', path: '/dashboard' },
-    { label: 'Inspections', path: '/' },
+    { label: 'Dashboard', path: '/' },
+    { label: 'Inspections', path: '/inspections' },
     { label: 'Reports', path: '/reports' },
+    { label: 'Scrap', path: '/scrap' },
     ...(user?.role === 'Administrator' ? [{ label: 'Admin', path: '/admin-dashboard' }] : []),
   ];
 

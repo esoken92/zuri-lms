@@ -1,159 +1,729 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import TireGrid from '../components/TireGrid';
+import { VEHICLE_TYPES, composeVehicleWithTrailers } from '../data/vehicleConfigs';
 
-const BASE_URL = process.env.REACT_APP_API_URL;
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-function Home({ inspections, setInspections }) {
-  const [form, setForm] = useState({
+function Home({ inspections, setInspections, user }) {
+  // Inspection Surveys (header level) - customer/survey header
+  const [inspectionSurveys, setInspectionSurveys] = useState([]);
+  const [editingSurvey, setEditingSurvey] = useState(null);
+  const [isAddingNewSurvey, setIsAddingNewSurvey] = useState(false);
+
+  // Tire Items (line items) - individual tire entries
+  const [tireItems, setTireItems] = useState([]);
+  const [editingItem, setEditingItem] = useState(null);
+  const [isAddingNewItem, setIsAddingNewItem] = useState(false);
+  const [selectedTireId, setSelectedTireId] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+
+  // Inspection Survey (header) form
+  const [surveyFormData, setSurveyFormData] = useState({
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+    location: '',
+    inspectionDate: new Date().toISOString().split('T')[0],
     vehicleId: '',
+    status: 'In Progress',
+  });
+
+  // Vehicle Configuration
+  const [vehicleType, setVehicleType] = useState(VEHICLE_TYPES.CAR);
+  const [trailer1Type, setTrailer1Type] = useState(null);
+  const [trailer2Type, setTrailer2Type] = useState(null);
+
+  // Tire Item form (individual tire)
+  const [itemFormData, setItemFormData] = useState({
     tirePosition: '',
     treadDepth: '',
     pressure: '',
     damage: '',
-    date: '',
-    photo: null,
+    condition: '',
+    photoUrl: '',
   });
 
-  const [modalPhoto, setModalPhoto] = useState(null);
+  // Compose vehicle config (supports up to 2 trailers)
+  const vehicleConfig = composeVehicleWithTrailers(vehicleType, trailer1Type, trailer2Type) || {};
+  const totalTires = vehicleConfig.allTires?.length || vehicleConfig.vehicle?.tires?.length || 0;
 
+  // Fetch inspection surveys on mount
   useEffect(() => {
-    axios.get(`${BASE_URL}/inspections`)
-      .then(res => setInspections(res.data))
-      .catch(err => console.error(err));
-  }, [setInspections]);
+    fetchInspectionSurveys();
+  }, []);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const fetchInspectionSurveys = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${BASE_URL}/api/inspections`, { withCredentials: true });
+      const filtered = filterInspectionsByAccess(response.data);
+      setInspectionSurveys(filtered);
+      setInspections(filtered);
+    } catch (err) {
+      console.error('Error fetching inspections:', err);
+      setError('Failed to load inspections');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handlePhotoChange = (e) => {
-    setForm({ ...form, photo: e.target.files[0] });
+  const filterInspectionsByAccess = (inspections) => {
+    if (user?.role === 'Administrator' || user?.role === 'Group Manager') {
+      return inspections;
+    } else if (user?.role === 'Store Manager') {
+      return inspections.filter(i => i.store_id === user?.storeId);
+    } else {
+      return inspections.filter(i => i.user_id === user?.id);
+    }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Handle survey selection
+  const handleSelectSurvey = (survey) => {
+    setEditingSurvey(survey);
+    setEditingItem(null);
+    setIsAddingNewItem(false);
+    setSelectedTireId(null);
+    setTireItems(survey.items || []);
+    setSurveyFormData({
+      customerName: survey.customer_name || '',
+      customerPhone: survey.customer_phone || '',
+      customerEmail: survey.customer_email || '',
+      location: survey.location || '',
+      inspectionDate: survey.report_date || new Date().toISOString().split('T')[0],
+      vehicleId: survey.vehicle_id || '',
+      status: survey.status || 'In Progress',
+    });
+  };
 
-    let photoUrl = '';
-    if (form.photo) {
-      const formData = new FormData();
-      formData.append('photo', form.photo);
-      try {
-        const uploadRes = await axios.post(`${BASE_URL}/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-        photoUrl = uploadRes.data.path;
-      } catch (error) {
-        console.error("Upload failed:", error);
+  // Add new survey
+  const handleAddNewSurvey = () => {
+    setIsAddingNewSurvey(true);
+    setEditingSurvey(null);
+    setTireItems([]);
+    setEditingItem(null);
+    setIsAddingNewItem(false);
+    setSelectedTireId(null);
+    setVehicleType(VEHICLE_TYPES.CAR);
+    setTrailer1Type(null);
+    setTrailer2Type(null);
+    setSurveyFormData({
+      customerName: '',
+      customerPhone: '',
+      customerEmail: '',
+      location: '',
+      inspectionDate: new Date().toISOString().split('T')[0],
+      vehicleId: '',
+      status: 'In Progress',
+    });
+  };
+
+  // Save survey (header)
+  const handleSaveSurvey = async () => {
+    try {
+      setError('');
+
+      if (!surveyFormData.customerName || !surveyFormData.location || !surveyFormData.vehicleId) {
+        setError('Please fill in required fields (Customer Name, Location, Vehicle ID)');
+        return;
       }
+
+      if (tireItems.length === 0) {
+        setError('Please add at least one tire item');
+        return;
+      }
+
+      const surveyData = {
+        ...surveyFormData,
+        items: tireItems,
+        userId: user?.id,
+        userName: user?.username,
+        storeId: user?.storeId,
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (editingSurvey?.id) {
+        // Update
+        await axios.post(`${BASE_URL}/api/inspections`, {
+          ...surveyData,
+          id: editingSurvey.id,
+        }, { withCredentials: true });
+      } else {
+        // Create
+        await axios.post(`${BASE_URL}/api/inspections`, surveyData, { withCredentials: true });
+      }
+
+      await fetchInspectionSurveys();
+      setIsAddingNewSurvey(false);
+      setEditingSurvey(null);
+      setTireItems([]);
+      setEditingItem(null);
+      setIsAddingNewItem(false);
+      setSelectedTireId(null);
+    } catch (err) {
+      console.error('Error saving inspection survey:', err);
+      setError(`Failed to save inspection: ${err?.response?.data?.code || err.message}`);
     }
-
-    const payload = {
-      vehicleId: form.vehicleId,
-      tirePosition: form.tirePosition,
-      treadDepth: form.treadDepth,
-      pressure: form.pressure,
-      damage: form.damage,
-      date: form.date,
-      photo: photoUrl,
-    };
-
-    if (!navigator.onLine) {
-      const existing = JSON.parse(localStorage.getItem('pendingInspections') || '[]');
-      localStorage.setItem('pendingInspections', JSON.stringify([...existing, payload]));
-      alert("You're offline. Inspection saved locally and will sync automatically.");
-      return;
-    }
-
-    axios.post(`${BASE_URL}/inspections`, payload)
-      .then((res) => {
-        setInspections([...inspections, { ...payload, id: res.data.id }]);
-        setForm({
-          vehicleId: '',
-          tirePosition: '',
-          treadDepth: '',
-          pressure: '',
-          damage: '',
-          date: '',
-          photo: null,
-        });
-      })
-      .catch((err) => console.error(err));
   };
+
+  // Add new tire item
+  const handleAddNewItem = () => {
+    setIsAddingNewItem(true);
+    setEditingItem(null);
+    setSelectedTireId(null);
+    setItemFormData({
+      tirePosition: '',
+      treadDepth: '',
+      pressure: '',
+      damage: '',
+      condition: '',
+      photoUrl: '',
+    });
+  };
+
+  // Select tire from grid
+  const handleTireSelect = (tireId) => {
+    const existingTire = tireItems.find(t => t.tirePosition === tireId);
+    if (existingTire) {
+      setEditingItem(existingTire);
+      setSelectedTireId(tireId);
+      setIsAddingNewItem(false);
+      setItemFormData(existingTire);
+    } else {
+      setIsAddingNewItem(true);
+      setEditingItem(null);
+      setSelectedTireId(tireId);
+      setItemFormData({
+        tirePosition: tireId,
+        treadDepth: '',
+        pressure: '',
+        damage: '',
+        condition: '',
+        photoUrl: '',
+      });
+    }
+  };
+
+  // Handle item form changes
+  const handleItemFormChange = (e) => {
+    const { name, value } = e.target;
+    setItemFormData({ ...itemFormData, [name]: value });
+  };
+
+  // Handle photo change
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    setPhotoFile(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload photo
+  const uploadPhoto = async () => {
+    if (!photoFile) return itemFormData.photoUrl;
+    try {
+      const uploadData = new FormData();
+      uploadData.append('photo', photoFile);
+      const res = await axios.post(`${BASE_URL}/upload`, uploadData, {
+        withCredentials: true,
+      });
+      return res.data.path;
+    } catch (err) {
+      console.error('Photo upload failed:', err);
+      return null;
+    }
+  };
+
+  // Save tire item
+  const handleSaveItem = async () => {
+    try {
+      setError('');
+
+      if (!itemFormData.tirePosition || !itemFormData.treadDepth || !itemFormData.pressure) {
+        setError('Please fill in Tire Position, Tread Depth, and Pressure');
+        return;
+      }
+
+      let photoUrl = itemFormData.photoUrl;
+      if (photoFile) {
+        photoUrl = await uploadPhoto();
+      }
+
+      const newItem = {
+        ...itemFormData,
+        photoUrl: photoUrl,
+      };
+
+      if (editingItem) {
+        setTireItems(tireItems.map(t => (t.tirePosition === editingItem.tirePosition ? newItem : t)));
+      } else {
+        setTireItems([...tireItems, newItem]);
+      }
+
+      setIsAddingNewItem(false);
+      setEditingItem(null);
+      setSelectedTireId(null);
+      setPhotoFile(null);
+      setPhotoPreview('');
+      setItemFormData({
+        tirePosition: '',
+        treadDepth: '',
+        pressure: '',
+        damage: '',
+        condition: '',
+        photoUrl: '',
+      });
+    } catch (err) {
+      setError(`Error saving tire item: ${err.message}`);
+    }
+  };
+
+  // Delete tire item
+  const handleDeleteItem = (tirePosition) => {
+    setTireItems(tireItems.filter(t => t.tirePosition !== tirePosition));
+    if (selectedTireId === tirePosition) {
+      setSelectedTireId(null);
+      setIsAddingNewItem(false);
+      setEditingItem(null);
+    }
+  };
+
+  // Cancel editing
+  const handleCancelSurvey = () => {
+    setIsAddingNewSurvey(false);
+    setEditingSurvey(null);
+    setTireItems([]);
+    setEditingItem(null);
+    setIsAddingNewItem(false);
+    setSelectedTireId(null);
+  };
+
+  if (loading) return <div className="p-6 text-center text-gray-500">Loading surveys...</div>;
 
   return (
-    <div id="report-section">
-      <div style={{ maxWidth: '800px', margin: 'auto', padding: '2rem', fontFamily: 'Arial' }}>
-        <h1 style={{ textAlign: 'center', color: '#333' }}>Zuri Tire Inspection</h1>
+    <div className="flex gap-4 p-6 bg-gray-50 min-h-screen dark:bg-gray-900">
+      {/* Left Panel - Survey List (Sidebar) */}
+      <div className="w-1/4 bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden flex flex-col">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 text-white">
+          <h2 className="text-xl font-bold">Inspection Surveys</h2>
+          <p className="text-blue-100 text-sm">{inspectionSurveys.length} total surveys</p>
+          <div className="mt-3 flex gap-2 text-sm">
+            <div className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-800 dark:text-gray-100">To Do: {inspectionSurveys.filter(s => (s.status || '').toLowerCase() === 'to do').length}</div>
+            <div className="px-2 py-1 bg-yellow-100 dark:bg-yellow-800 rounded-full text-yellow-800 dark:text-yellow-100">In Progress: {inspectionSurveys.filter(s => (s.status || '').toLowerCase() === 'in progress').length}</div>
+            <div className="px-2 py-1 bg-green-100 dark:bg-green-800 rounded-full text-green-800 dark:text-green-100">Completed: {inspectionSurveys.filter(s => (s.status || '').toLowerCase() === 'completed').length}</div>
+          </div>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <input name="vehicleId" placeholder="Vehicle ID" value={form.vehicleId} onChange={handleChange} required /><br /><br />
-          <input name="tirePosition" placeholder="Tire Position (e.g. FL, FR)" value={form.tirePosition} onChange={handleChange} required /><br /><br />
-          <input name="treadDepth" placeholder="Tread Depth (mm)" type="number" value={form.treadDepth} onChange={handleChange} required /><br /><br />
-          <input name="pressure" placeholder="Pressure (bar)" type="number" value={form.pressure} onChange={handleChange} required /><br /><br />
-          <input name="damage" placeholder="Any visible damage?" value={form.damage} onChange={handleChange} /><br /><br />
-          <input name="date" type="date" value={form.date} onChange={handleChange} required /><br /><br />
-          <input type="file" accept="image/*" onChange={handlePhotoChange} /><br /><br />
-          <button type="submit">Submit Inspection</button>
-        </form>
+        <div className="flex-1 overflow-y-auto">
+          {inspectionSurveys.length === 0 ? (
+            <div className="p-4 text-center text-gray-500 dark:text-gray-400">No surveys yet</div>
+          ) : (
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {inspectionSurveys.map((survey) => {
+                const status = (survey.status || '').toLowerCase();
+                const badge = status === 'completed' ? 'bg-green-100 text-green-800' : status === 'in progress' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800';
+                return (
+                  <div
+                    key={survey.id}
+                    onClick={() => handleSelectSurvey(survey)}
+                    className={`p-4 cursor-pointer transition flex items-start justify-between ${
+                      editingSurvey?.id === survey.id
+                        ? 'bg-blue-50 dark:bg-blue-900 border-l-4 border-blue-600'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{survey.vehicle_id || survey.vehicleId}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">{survey.report_date || survey.inspectionDate}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">Customer: {survey.customer_name || survey.customerName}</div>
+                    </div>
+                    <div className="ml-3 text-right">
+                      <div className={`px-2 py-1 rounded-full text-xs font-semibold ${badge}`}>{survey.status || 'To Do'}</div>
+                      <div className="text-xs text-gray-400 mt-1">{survey.items?.length || 0} items</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-        <h2 style={{ marginTop: '3rem', color: '#333' }}>Inspection Records</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f0f0f0' }}>
-              <th style={{ border: '1px solid #ccc', padding: '8px' }}>Date</th>
-              <th style={{ border: '1px solid #ccc', padding: '8px' }}>Vehicle</th>
-              <th style={{ border: '1px solid #ccc', padding: '8px' }}>Tire</th>
-              <th style={{ border: '1px solid #ccc', padding: '8px' }}>Tread (mm)</th>
-              <th style={{ border: '1px solid #ccc', padding: '8px' }}>Pressure (bar)</th>
-              <th style={{ border: '1px solid #ccc', padding: '8px' }}>Damage</th>
-              <th style={{ border: '1px solid #ccc', padding: '8px' }}>Photo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inspections.map((insp) => (
-              <tr key={insp.id}>
-                <td style={{ border: '1px solid #ccc', padding: '8px' }}>{insp.date}</td>
-                <td style={{ border: '1px solid #ccc', padding: '8px' }}>{insp.vehicleId}</td>
-                <td style={{ border: '1px solid #ccc', padding: '8px' }}>{insp.tirePosition}</td>
-                <td style={{ border: '1px solid #ccc', padding: '8px' }}>{insp.treadDepth}</td>
-                <td style={{ border: '1px solid #ccc', padding: '8px' }}>{insp.pressure}</td>
-                <td style={{ border: '1px solid #ccc', padding: '8px' }}>{insp.damage}</td>
-                <td style={{ border: '1px solid #ccc', padding: '8px' }}>
-                  {insp.photo ? (
-                    <img
-                      src={`${BASE_URL}${insp.photo}`}
-                      alt="Tire"
-                      style={{ width: '60px', height: '40px', cursor: 'pointer', objectFit: 'cover' }}
-                      onClick={() => setModalPhoto(`${BASE_URL}${insp.photo}`)}
-                    />
-                  ) : 'No Photo'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <button
+          onClick={handleAddNewSurvey}
+          className="bg-blue-600 text-white p-4 font-semibold hover:bg-blue-700 transition"
+        >
+          + New Survey
+        </button>
       </div>
 
-      {modalPhoto && (
-        <div
-          onClick={() => setModalPhoto(null)}
-          style={{
-            position: 'fixed',
-            top: 0, left: 0,
-            width: '100%', height: '100%',
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-            cursor: 'zoom-out'
-          }}
-        >
-          <img src={modalPhoto} alt="Enlarged tire" style={{ maxHeight: '80%', maxWidth: '90%' }} />
-        </div>
-      )}
+      {/* Right Panel - Survey Form & Tire Grid & Items */}
+      <div className="w-3/4 bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-y-auto flex flex-col">
+        {isAddingNewSurvey || editingSurvey ? (
+          <div className="p-6 space-y-6">
+            {/* Error Message */}
+            {error && (
+              <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {/* Header Section - Survey Details */}
+            <div className="border-l-4 border-blue-500 pl-6 py-4 bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-900 dark:to-transparent rounded-r-lg">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Survey Details</h2>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Customer Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="customerName"
+                    value={surveyFormData.customerName}
+                    onChange={(e) => setSurveyFormData({ ...surveyFormData, customerName: e.target.value })}
+                    placeholder="Enter name"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Location *
+                  </label>
+                  <input
+                    type="text"
+                    name="location"
+                    value={surveyFormData.location}
+                    onChange={(e) => setSurveyFormData({ ...surveyFormData, location: e.target.value })}
+                    placeholder="Enter location"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Vehicle ID *
+                  </label>
+                  <input
+                    type="text"
+                    name="vehicleId"
+                    value={surveyFormData.vehicleId}
+                    onChange={(e) => setSurveyFormData({ ...surveyFormData, vehicleId: e.target.value })}
+                    placeholder="e.g., TR-001"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    name="customerPhone"
+                    value={surveyFormData.customerPhone}
+                    onChange={(e) => setSurveyFormData({ ...surveyFormData, customerPhone: e.target.value })}
+                    placeholder="Phone number"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="customerEmail"
+                    value={surveyFormData.customerEmail}
+                    onChange={(e) => setSurveyFormData({ ...surveyFormData, customerEmail: e.target.value })}
+                    placeholder="Email"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Inspection Date *
+                  </label>
+                  <input
+                    type="date"
+                    name="inspectionDate"
+                    value={surveyFormData.inspectionDate}
+                    onChange={(e) => setSurveyFormData({ ...surveyFormData, inspectionDate: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Vehicle Configuration */}
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Vehicle Configuration</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Vehicle Type
+                    </label>
+                    <select
+                      value={vehicleType}
+                      onChange={(e) => {
+                        setVehicleType(e.target.value);
+                        setTireItems([]);
+                        setSelectedTireId(null);
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value={VEHICLE_TYPES.CAR}>Car (2x2)</option>
+                      <option value={VEHICLE_TYPES.TRUCK_2AXLE}>Truck 2-Axle</option>
+                      <option value={VEHICLE_TYPES.TRUCK_3AXLE}>Truck 3-Axle</option>
+                      <option value={VEHICLE_TYPES.TRACTOR}>Tractor</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Trailer 1 (Optional)
+                    </label>
+                    <select
+                      value={trailer1Type || ''}
+                      onChange={(e) => {
+                        setTrailer1Type(e.target.value || null);
+                        setTireItems([]);
+                        setSelectedTireId(null);
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">None</option>
+                      <option value={VEHICLE_TYPES.TRAILER_2AXLE}>Trailer 2-Axle</option>
+                      <option value={VEHICLE_TYPES.TRAILER_3AXLE}>Trailer 3-Axle</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Trailer 2 (Optional)
+                    </label>
+                    <select
+                      value={trailer2Type || ''}
+                      onChange={(e) => {
+                        setTrailer2Type(e.target.value || null);
+                        setTireItems([]);
+                        setSelectedTireId(null);
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">None</option>
+                      <option value={VEHICLE_TYPES.TRAILER_2AXLE}>Trailer 2-Axle</option>
+                      <option value={VEHICLE_TYPES.TRAILER_3AXLE}>Trailer 3-Axle</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tire Grid Section */}
+            <div className="border-l-4 border-green-500 pl-6 py-4 bg-gradient-to-r from-green-50 to-transparent dark:from-green-900 dark:to-transparent rounded-r-lg">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Tire Positions: {tireItems.length} / {totalTires} Inspected
+                </h3>
+                <div className="w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                  <div
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all"
+                    style={{ width: `${(tireItems.length / totalTires) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              <div className="flex justify-center py-8 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <TireGrid
+                  config={vehicleConfig}
+                  selectedTireId={selectedTireId}
+                  onTireSelect={handleTireSelect}
+                />
+              </div>
+            </div>
+
+            {/* Tire Items List Section */}
+            {tireItems.length > 0 && (
+              <div className="border-l-4 border-purple-500 pl-6 py-4 bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-900 dark:to-transparent rounded-r-lg">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Inspected Tires</h3>
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {tireItems.map((item) => (
+                    <div
+                      key={item.tirePosition}
+                      className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600"
+                    >
+                      <div className="flex-1">
+                        <div className="font-bold text-gray-900 dark:text-white">{item.tirePosition}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          Tread: {item.treadDepth}mm | Pressure: {item.pressure}bar
+                          {item.damage && ` | Damage: ${item.damage}`}
+                          {item.condition && ` | Condition: ${item.condition}`}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleTireSelect(item.tirePosition)}
+                          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-sm font-semibold"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.tirePosition)}
+                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition text-sm font-semibold"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tire Item Form Section */}
+            {(isAddingNewItem || editingItem) && selectedTireId && (
+              <div className="border-l-4 border-orange-500 pl-6 py-4 bg-gradient-to-r from-orange-50 to-transparent dark:from-orange-900 dark:to-transparent rounded-r-lg">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  {editingItem ? 'Edit' : 'Add'} Tire: {selectedTireId}
+                </h3>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Tread Depth (mm) *
+                    </label>
+                    <input
+                      type="number"
+                      name="treadDepth"
+                      value={itemFormData.treadDepth}
+                      onChange={handleItemFormChange}
+                      placeholder="e.g., 7.5"
+                      step="0.1"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Pressure (bar) *
+                    </label>
+                    <input
+                      type="number"
+                      name="pressure"
+                      value={itemFormData.pressure}
+                      onChange={handleItemFormChange}
+                      placeholder="e.g., 2.5"
+                      step="0.1"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Damage
+                    </label>
+                    <input
+                      type="text"
+                      name="damage"
+                      value={itemFormData.damage}
+                      onChange={handleItemFormChange}
+                      placeholder="e.g., Crack, Bald"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Condition
+                    </label>
+                    <select
+                      name="condition"
+                      value={itemFormData.condition}
+                      onChange={handleItemFormChange}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-orange-500 outline-none"
+                    >
+                      <option value="">Select</option>
+                      <option value="Good">Good</option>
+                      <option value="Fair">Fair</option>
+                      <option value="Poor">Poor</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    Photo
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                  />
+                  {(photoPreview || itemFormData.photoUrl) && (
+                    <img
+                      src={photoPreview || `${BASE_URL}${itemFormData.photoUrl}`}
+                      alt="Tire"
+                      className="mt-3 max-w-xs rounded-lg border"
+                    />
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSaveItem}
+                    className="flex-1 bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition"
+                  >
+                    Save Tire
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsAddingNewItem(false);
+                      setEditingItem(null);
+                      setSelectedTireId(null);
+                      setPhotoFile(null);
+                      setPhotoPreview('');
+                    }}
+                    className="flex-1 bg-gray-400 dark:bg-gray-600 text-white font-semibold py-2 rounded-lg hover:bg-gray-500 dark:hover:bg-gray-700 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleAddNewItem}
+                disabled={tireItems.length >= totalTires}
+                className="flex-1 bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                + Add Tire
+              </button>
+              <button
+                onClick={handleSaveSurvey}
+                disabled={tireItems.length === 0}
+                className="flex-1 bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ✓ Save Survey
+              </button>
+              <button
+                onClick={handleCancelSurvey}
+                className="flex-1 bg-gray-400 dark:bg-gray-600 text-white font-semibold py-3 rounded-lg hover:bg-gray-500 dark:hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+            <p className="text-lg">Select a survey or create a new one to begin</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
