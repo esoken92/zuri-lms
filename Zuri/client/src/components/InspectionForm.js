@@ -43,10 +43,58 @@ function InspectionForm({ onSubmit }) {
 
   const totalTires = vehicleConfig.allTires?.length || vehicleConfig.tires?.length || 0;
 
+  const DRAFT_KEY = 'zuri-inspection-draft';
+
+  // Load draft on mount
+  React.useEffect(() => {
+    try {
+      const draft = localStorage.getItem(DRAFT_KEY);
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed.headerData) setHeaderData(parsed.headerData);
+        if (parsed.vehicleType) setVehicleType(parsed.vehicleType);
+        if (parsed.trailer1Type !== undefined) setTrailer1Type(parsed.trailer1Type);
+        if (parsed.trailer2Type !== undefined) setTrailer2Type(parsed.trailer2Type);
+        if (parsed.tireItems) setTireItems(parsed.tireItems);
+      }
+    } catch (e) {
+      console.warn('Failed to load draft:', e);
+    }
+  }, []);
+
+  // Auto-save draft to localStorage
+  const saveDraft = () => {
+    try {
+      const draft = {
+        headerData,
+        vehicleType,
+        trailer1Type,
+        trailer2Type,
+        tireItems,
+        lastSaved: new Date().toISOString(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch (e) {
+      console.warn('Failed to save draft:', e);
+    }
+  };
+
+  // Clear draft
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch (e) {
+      // ignore
+    }
+  };
+
   // Handle header changes
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    setHeaderData({ ...headerData, [name]: value });
+    const updated = { ...headerData, [name]: value };
+    setHeaderData(updated);
+    // Auto-save after header change
+    setTimeout(saveDraft, 100);
   };
 
   // Handle tire selection from grid
@@ -129,11 +177,14 @@ function InspectionForm({ onSubmit }) {
         // ignore
       }
 
-      if (isEditingItem) {
-        setTireItems(tireItems.map(t => (t.tirePosition === selectedTireId ? newItem : t)));
-      } else {
-        setTireItems([...tireItems, newItem]);
-      }
+      const updatedItems = isEditingItem
+        ? tireItems.map(t => (t.tirePosition === selectedTireId ? newItem : t))
+        : [...tireItems, newItem];
+
+      setTireItems(updatedItems);
+
+      // Auto-save draft after tire save
+      setTimeout(saveDraft, 100);
 
       setSelectedTireId(null);
       setTireFormData({
@@ -223,6 +274,9 @@ function InspectionForm({ onSubmit }) {
         photo: null,
       });
       setPreview(null);
+
+      // Clear draft after successful submit
+      clearDraft();
 
       if (onSubmit) onSubmit();
     } catch (err) {

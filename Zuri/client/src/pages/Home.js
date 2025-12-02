@@ -52,6 +52,54 @@ function Home({ inspections, setInspections, user }) {
   const vehicleConfig = composeVehicleWithTrailers(vehicleType, trailer1Type, trailer2Type) || {};
   const totalTires = vehicleConfig.allTires?.length || vehicleConfig.vehicle?.tires?.length || 0;
 
+  const DRAFT_KEY = 'zuri-home-inspection-draft';
+
+  // Load draft on mount (after initial surveys fetch)
+  React.useEffect(() => {
+    if (inspectionSurveys.length === 0) return; // wait for initial load
+    try {
+      const draft = localStorage.getItem(DRAFT_KEY);
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        if (parsed.surveyFormData) setSurveyFormData(parsed.surveyFormData);
+        if (parsed.vehicleType) setVehicleType(parsed.vehicleType);
+        if (parsed.trailer1Type !== undefined) setTrailer1Type(parsed.trailer1Type);
+        if (parsed.trailer2Type !== undefined) setTrailer2Type(parsed.trailer2Type);
+        if (parsed.tireItems) setTireItems(parsed.tireItems);
+        if (parsed.isAddingNewSurvey) setIsAddingNewSurvey(true);
+      }
+    } catch (e) {
+      console.warn('Failed to load Home draft:', e);
+    }
+  }, [inspectionSurveys]);
+
+  // Auto-save draft
+  const saveDraft = () => {
+    try {
+      const draft = {
+        surveyFormData,
+        vehicleType,
+        trailer1Type,
+        trailer2Type,
+        tireItems,
+        isAddingNewSurvey,
+        lastSaved: new Date().toISOString(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch (e) {
+      console.warn('Failed to save Home draft:', e);
+    }
+  };
+
+  // Clear draft
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch (e) {
+      // ignore
+    }
+  };
+
   // Fetch inspection surveys on mount
   useEffect(() => {
     fetchInspectionSurveys();
@@ -164,6 +212,9 @@ function Home({ inspections, setInspections, user }) {
       setEditingItem(null);
       setIsAddingNewItem(false);
       setSelectedTireId(null);
+
+      // Clear draft after successful submit
+      clearDraft();
     } catch (err) {
       console.error('Error saving inspection survey:', err);
       setError(`Failed to save inspection: ${err?.response?.data?.code || err.message}`);
@@ -263,11 +314,14 @@ function Home({ inspections, setInspections, user }) {
         photoUrl: photoUrl,
       };
 
-      if (editingItem) {
-        setTireItems(tireItems.map(t => (t.tirePosition === editingItem.tirePosition ? newItem : t)));
-      } else {
-        setTireItems([...tireItems, newItem]);
-      }
+      const updatedItems = editingItem
+        ? tireItems.map(t => (t.tirePosition === editingItem.tirePosition ? newItem : t))
+        : [...tireItems, newItem];
+
+      setTireItems(updatedItems);
+
+      // Auto-save draft after tire save
+      setTimeout(saveDraft, 100);
 
       setIsAddingNewItem(false);
       setEditingItem(null);

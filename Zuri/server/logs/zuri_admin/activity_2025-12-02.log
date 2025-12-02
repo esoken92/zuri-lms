@@ -1,0 +1,4 @@
+[2025-12-02T12:55:08.981Z] [REQ] GET /api/table/tyres from ::1 bodyKeys=0
+[2025-12-02T12:55:08.985Z] [RES] GET /api/table/tyres status=200
+[2025-12-02T12:55:08.999Z] [REQ] GET /api/inspections from ::1 bodyKeys=0
+[2025-12-02T12:56:17.240Z] [REQ] POST /api/inspections from ::1 bodyKeys=6
