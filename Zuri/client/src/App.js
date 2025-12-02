@@ -1,7 +1,8 @@
 // Zuri/client/src/App.js
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import InspectionForm from './components/InspectionForm';
+import Home from './pages/Home';
+import InspectionsPage from './pages/InspectionsPage';
 import ReportPage from './pages/ReportPage';
 import Reports from './pages/Reports';
 import ScrapPage from './pages/ScrapPage';
@@ -79,7 +80,8 @@ function App() {
           {user ? (
             <>
               <Route path="/" element={<Dashboard user={user} onLogout={() => setUser(null)} />} />
-              <Route path="/inspections" element={<InspectionForm />} />
+              <Route path="/home" element={<Home inspections={[]} setInspections={() => {}} user={user} />} />
+              <Route path="/inspections" element={<InspectionsPage user={user} />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/scrap" element={<ScrapPage user={user} />} />
               <Route path="/report-page" element={<ReportPage />} />

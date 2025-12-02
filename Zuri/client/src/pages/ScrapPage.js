@@ -18,6 +18,7 @@ export default function ScrapPage({ user }) {
   const [error, setError] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  const [tiresDatabase, setTiresDatabase] = useState([]);
 
   // Scrap Report (header) form
   const [reportFormData, setReportFormData] = useState({
@@ -46,7 +47,17 @@ export default function ScrapPage({ user }) {
   // Fetch scrap reports on mount
   useEffect(() => {
     fetchScrapReports();
+    fetchTiresDatabase();
   }, []);
+
+  const fetchTiresDatabase = async () => {
+    try {
+      const res = await axios.get(`${BASE_URL}/api/table/tyres`, { withCredentials: true });
+      setTiresDatabase(res.data || []);
+    } catch (err) {
+      console.warn('Failed to load tires database:', err);
+    }
+  };
 
   const fetchScrapReports = async () => {
     try {
@@ -449,9 +460,12 @@ export default function ScrapPage({ user }) {
                   {!isAddingNewItem && (
                     <button
                       onClick={handleAddItem}
-                      className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                      className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm inline-flex items-center gap-1"
                     >
-                      + Add Item
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="size-4">
+                        <path fillRule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm.75-10.25v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5a.75.75 0 0 1 1.5 0Z" clipRule="evenodd" />
+                      </svg>
+                      Add Item
                     </button>
                   )}
                 </div>
@@ -493,6 +507,38 @@ export default function ScrapPage({ user }) {
                     <h4 className="font-semibold mb-3">
                       {editingItem ? 'Edit Item' : 'Add Scrap Item'}
                     </h4>
+
+                    {/* Database Tire Selector */}
+                    <div className="border p-3 bg-blue-50 dark:bg-blue-900 rounded-lg mb-4">
+                      <h5 className="font-semibold text-sm text-gray-900 dark:text-white mb-2">📋 Select Tire from Database</h5>
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mb-2">Choose an existing tire to auto-fill brand and size:</p>
+                      <select
+                        onChange={(e) => {
+                          const tire = tiresDatabase.find(t => t.id === parseInt(e.target.value));
+                          if (tire) {
+                            setItemFormData({
+                              ...itemFormData,
+                              size: tire.size || '',
+                              brand: tire.brand || '',
+                              pattern: tire.pattern || '',
+                              dot: tire.dot || '',
+                            });
+                            e.target.value = ''; // Reset dropdown
+                          }
+                        }}
+                        className="w-full px-2 py-2 border rounded dark:bg-gray-600 text-sm"
+                      >
+                        <option value="">-- Select a tire --</option>
+                        {tiresDatabase.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.brand ? `${t.brand} - ` : ''}{t.size || 'Unknown Size'} {t.pattern ? `(${t.pattern})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                        Total available: <span className="font-semibold">{tiresDatabase.length} tires</span>
+                      </p>
+                    </div>
 
                     {/* Item Form */}
                     <div className="space-y-3">

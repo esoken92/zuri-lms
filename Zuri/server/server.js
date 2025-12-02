@@ -96,6 +96,17 @@ async function runMigrations() {
     `;
     await pool.query(createDepotsSql);
 
+    const createTyresSql = `
+      CREATE TABLE IF NOT EXISTS "tyres" (
+        id SERIAL PRIMARY KEY,
+        brand TEXT NOT NULL,
+        size TEXT NOT NULL,
+        type TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await pool.query(createTyresSql);
+
     const createVehicleConfigsSql = `
       CREATE TABLE IF NOT EXISTS "vehicle_configs" (
         id SERIAL PRIMARY KEY,
@@ -444,16 +455,16 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter: only allow images
+// File filter: only allow images (including HEIF/HEIC from iPhone/Android)
 const fileFilter = (req, file, cb) => {
-  const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heif', 'image/heic'];
+  const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heif', '.heic'];
   const ext = path.extname(file.originalname).toLowerCase();
   
   if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid file type. Only images allowed. Got: ${file.mimetype}`));
+    cb(new Error(`INVALID_FILE_TYPE|${file.mimetype}`));
   }
 };
 
@@ -464,6 +475,55 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024
   }
 });
+
+// Error handler for multer file size and type errors
+const handleUploadErrors = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      const errorCode = `FILE_TOO_LARGE_${Date.now()}`;
+      const fileSizeMsg = `File exceeds 10MB limit`;
+      console.warn(`[UPLOAD] ${new Date().toISOString()} - ${errorCode}: ${fileSizeMsg}`);
+      logToFile(req.logUsername, `[UPLOAD] ${errorCode}: ${fileSizeMsg}`);
+      
+      // Log to activity log with error code
+      logActivity(req, {
+        activity_type: 'FILE_UPLOAD_ERROR',
+        activity_description: fileSizeMsg,
+        error_code: errorCode,
+        request_data: { filename: req.file?.originalname || 'unknown', size: req.file?.size || 0 },
+        success: false
+      });
+      
+      return res.status(413).json({ 
+        error: 'File too large',
+        errorCode,
+        message: fileSizeMsg,
+        maxSize: '10MB'
+      });
+    }
+  } else if (err && err.message && err.message.includes('INVALID_FILE_TYPE')) {
+    const errorCode = `INVALID_FILE_TYPE_${Date.now()}`;
+    const mimeType = err.message.split('|')[1] || 'unknown';
+    const msg = `Invalid file type: ${mimeType}. Only JPEG, PNG, GIF, WebP, HEIF/HEIC allowed`;
+    console.warn(`[UPLOAD] ${new Date().toISOString()} - ${errorCode}: ${msg}`);
+    logToFile(req.logUsername, `[UPLOAD] ${errorCode}: ${msg}`);
+    
+    logActivity(req, {
+      activity_type: 'FILE_UPLOAD_ERROR',
+      activity_description: msg,
+      error_code: errorCode,
+      request_data: { filename: req.file?.originalname || 'unknown', mimeType },
+      success: false
+    });
+    
+    return res.status(400).json({ 
+      error: 'Invalid file type',
+      errorCode,
+      message: msg
+    });
+  }
+  next(err);
+};
 
 // Normalize keys: convert camelCase to snake_case, remove unsafe chars, lowercase
 const normalize = (s) => {
@@ -478,23 +538,41 @@ const normalize = (s) => {
 };
 
 // POST /upload - accepts multipart/form-data field `photo` (SECURE)
-app.post('/upload', requireLogin, upload.single('photo'), (req, res) => {
+app.post('/upload', requireLogin, upload.single('photo'), handleUploadErrors, (req, res) => {
   const time = new Date().toISOString();
   if (!req.file) {
     const msg = `No file received`;
     console.warn(`[UPLOAD] ${time} - ${msg}`);
     logToFile(req.logUsername, `[UPLOAD] ${msg}`);
+    logActivity(req, {
+      activity_type: 'FILE_UPLOAD_ERROR',
+      activity_description: msg,
+      error_code: 'NO_FILE_PROVIDED',
+      success: false
+    });
     return res.status(400).json({ error: 'No file uploaded. Make sure the form field is named `photo`.' });
   }
   try {
     const msg = `Received file ${req.file.originalname} -> ${req.file.filename} (${req.file.size} bytes)`;
     console.log(`[UPLOAD] ${time} - ${msg}`);
     logToFile(req.logUsername, `[UPLOAD] ${msg}`);
+    logActivity(req, {
+      activity_type: 'FILE_UPLOADED',
+      activity_description: msg,
+      request_data: { filename: req.file.originalname, size: req.file.size, path: req.file.filename },
+      success: true
+    });
     return res.json({ path: `/uploads/${req.file.filename}` });
   } catch (err) {
     const msg = `Error saving file: ${err.message}`;
     console.error(`[UPLOAD] ${time} - ${msg}`);
     logToFile(req.logUsername, `[UPLOAD] ${msg}`);
+    logActivity(req, {
+      activity_type: 'FILE_UPLOAD_ERROR',
+      activity_description: msg,
+      error_code: 'FILE_SAVE_ERROR',
+      success: false
+    });
     return res.status(500).json({ error: 'Failed to save uploaded file', details: err.message });
   }
 });
@@ -566,6 +644,13 @@ function requireLogin(req, res, next) {
 function requireAdmin(req, res, next) {
   if (!req.session.user || req.session.user.role !== 'Administrator') {
     return res.status(403).json({ error: 'Admin only' });
+  }
+  next();
+}
+
+function requireManagerOrAdmin(req, res, next) {
+  if (!req.session.user || (req.session.user.role !== 'Administrator' && req.session.user.role !== 'Group Manager')) {
+    return res.status(403).json({ error: 'Manager or admin access required' });
   }
   next();
 }
@@ -1431,6 +1516,146 @@ app.delete('/api/depots/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// ===== TYRES API =====
+app.get('/api/tyres', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM tyres ORDER BY brand, size');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/tyres', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { brand, size, type } = req.body;
+    const result = await pool.query(
+      'INSERT INTO tyres (brand, size, type) VALUES ($1, $2, $3) RETURNING *',
+      [brand, size, type]
+    );
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'CREATE',
+      activityDescription: `Created tyre: ${brand} ${size}`,
+      tableName: 'tyres',
+      recordId: result.rows[0].id,
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'CREATE_FAILED',
+      activityDescription: `Failed to create tyre`,
+      tableName: 'tyres',
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_001',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/tyres/:id', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { brand, size, type } = req.body;
+    const result = await pool.query(
+      'UPDATE tyres SET brand=$1, size=$2, type=$3 WHERE id=$4 RETURNING *',
+      [brand, size, type, req.params.id]
+    );
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'UPDATE',
+      activityDescription: `Updated tyre: ${brand} ${size}`,
+      tableName: 'tyres',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'UPDATE_FAILED',
+      activityDescription: `Failed to update tyre ID: ${req.params.id}`,
+      tableName: 'tyres',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_002',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/tyres/:id', requireAdmin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    await pool.query('DELETE FROM tyres WHERE id=$1', [req.params.id]);
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DELETE',
+      activityDescription: `Deleted tyre ID: ${req.params.id}`,
+      tableName: 'tyres',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DELETE_FAILED',
+      activityDescription: `Failed to delete tyre ID: ${req.params.id}`,
+      tableName: 'tyres',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_003',
+      errorMessage: err.message
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ===== VEHICLE CONFIGS API =====
 app.get('/api/vehicle-configs', requireLogin, async (req, res) => {
   try {
@@ -1567,6 +1792,306 @@ app.delete('/api/vehicle-configs/:id', requireAdmin, async (req, res) => {
       errorMessage: err.message
     });
     
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== USER SUGGESTIONS API (Non-Admin Data Entry) =====
+// Create user_suggestions table if it doesn't exist
+async function createSuggestionsTable() {
+  try {
+    const createSuggestionsSql = `
+      CREATE TABLE IF NOT EXISTS "user_suggestions" (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        suggestion_type TEXT NOT NULL,
+        suggestion_data JSONB NOT NULL,
+        status TEXT DEFAULT 'pending',
+        admin_reviewed_by TEXT,
+        admin_reviewed_at TIMESTAMP WITH TIME ZONE,
+        admin_notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_suggestions_status ON user_suggestions(status);
+      CREATE INDEX IF NOT EXISTS idx_suggestions_user_id ON user_suggestions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_suggestions_type ON user_suggestions(suggestion_type);
+    `;
+    await pool.query(createSuggestionsSql);
+    console.log('[DB] user_suggestions table ready');
+  } catch (err) {
+    console.error('[DB] Error creating suggestions table:', err.message);
+  }
+}
+createSuggestionsTable();
+
+// Submit a new suggestion (any logged-in user)
+app.post('/api/suggestions', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  // Only non-admins can suggest data
+  if (user.role === 'Administrator') {
+    return res.status(403).json({ error: 'Admins cannot submit suggestions - use database management instead' });
+  }
+
+  try {
+    const { suggestionType, suggestionData } = req.body;
+
+    // Validate suggestion type
+    const allowedTypes = ['company', 'depot', 'tyre', 'vehicleConfig'];
+    if (!allowedTypes.includes(suggestionType)) {
+      return res.status(400).json({ error: 'Invalid suggestion type' });
+    }
+
+    // Validate suggestion data is not empty
+    if (!suggestionData || Object.keys(suggestionData).length === 0) {
+      return res.status(400).json({ error: 'Suggestion data is required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO user_suggestions (user_id, username, suggestion_type, suggestion_data, status)
+       VALUES ($1, $2, $3, $4, 'pending')
+       RETURNING *`,
+      [user.id, user.username, suggestionType, JSON.stringify(suggestionData)]
+    );
+
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DATA_SUGGESTION',
+      activityDescription: `Submitted ${suggestionType} suggestion`,
+      tableName: 'user_suggestions',
+      recordId: result.rows[0].id,
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+
+    res.json({
+      message: 'Suggestion submitted successfully',
+      suggestion: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error submitting suggestion:', err);
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DATA_SUGGESTION_FAILED',
+      activityDescription: `Failed to submit suggestion`,
+      tableName: 'user_suggestions',
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'SUGG_001',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get suggestions (admins and managers only)
+app.get('/api/suggestions', requireManagerOrAdmin, async (req, res) => {
+  const user = req.session.user;
+  
+  try {
+    const { status = 'pending' } = req.query;
+
+    let query = 'SELECT * FROM user_suggestions';
+    const params = [];
+
+    if (status !== 'all') {
+      query += ' WHERE status = $1';
+      params.push(status);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching suggestions:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Approve a suggestion (admins and managers only)
+app.post('/api/suggestions/:id/approve', requireManagerOrAdmin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  const suggestionId = req.params.id;
+
+  try {
+    // Get the suggestion
+    const suggestionResult = await pool.query(
+      'SELECT * FROM user_suggestions WHERE id = $1',
+      [suggestionId]
+    );
+
+    if (suggestionResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Suggestion not found' });
+    }
+
+    const suggestion = suggestionResult.rows[0];
+
+    if (suggestion.status !== 'pending') {
+      return res.status(400).json({ error: `Cannot approve ${suggestion.status} suggestion` });
+    }
+
+    const data = suggestion.suggestion_data;
+    let insertedRecord;
+
+    // Add to appropriate master table based on suggestion type
+    try {
+      switch (suggestion.suggestion_type) {
+        case 'company':
+          const companyResult = await pool.query(
+            'INSERT INTO companies (name, contact_name, email, phone) VALUES ($1, $2, $3, $4) RETURNING *',
+            [data.companyName, data.contactPerson, data.email, data.phone]
+          );
+          insertedRecord = companyResult.rows[0];
+          break;
+
+        case 'depot':
+          const depotResult = await pool.query(
+            'INSERT INTO depots (location, contact_name, email, phone) VALUES ($1, $2, $3, $4) RETURNING *',
+            [data.depotName, data.manager, data.phone, data.phone]
+          );
+          insertedRecord = depotResult.rows[0];
+          break;
+
+        case 'tyre':
+          const tyreResult = await pool.query(
+            'INSERT INTO tyres (brand, size, type) VALUES ($1, $2, $3) RETURNING *',
+            [data.brand, data.size, data.type]
+          );
+          insertedRecord = tyreResult.rows[0];
+          break;
+
+        case 'vehicleConfig':
+          const configResult = await pool.query(
+            'INSERT INTO vehicle_configs (item_code, name, tire_config, spares) VALUES ($1, $2, $3, $4) RETURNING *',
+            [
+              `CONFIG_${Date.now()}`,
+              data.vehicleType,
+              JSON.stringify({ axles: data.axles, totalWheels: data.totalWheels }),
+              data.tyresPerAxle || 0
+            ]
+          );
+          insertedRecord = configResult.rows[0];
+          break;
+
+        default:
+          return res.status(400).json({ error: 'Unknown suggestion type' });
+      }
+    } catch (insertErr) {
+      await logActivity({
+        userId: user.id,
+        username: user.username,
+        activityType: 'SUGGESTION_APPROVE_FAILED',
+        activityDescription: `Failed to insert approved suggestion into ${suggestion.suggestion_type} table`,
+        tableName: 'user_suggestions',
+        recordId: suggestionId,
+        ipAddress,
+        userAgent,
+        success: false,
+        errorCode: 'SUGG_002',
+        errorMessage: insertErr.message
+      });
+      throw insertErr;
+    }
+
+    // Update suggestion status to approved
+    const updateResult = await pool.query(
+      `UPDATE user_suggestions 
+       SET status = 'approved', admin_reviewed_by = $1, admin_reviewed_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [user.username, suggestionId]
+    );
+
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'SUGGESTION_APPROVED',
+      activityDescription: `Approved ${suggestion.suggestion_type} suggestion from ${suggestion.username}`,
+      tableName: 'user_suggestions',
+      recordId: suggestionId,
+      ipAddress,
+      userAgent,
+      requestData: { suggestion_id: suggestionId },
+      responseData: updateResult.rows[0]
+    });
+
+    res.json({
+      message: 'Suggestion approved and added to database',
+      suggestion: updateResult.rows[0],
+      insertedRecord: insertedRecord
+    });
+  } catch (err) {
+    console.error('Error approving suggestion:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reject a suggestion (admins and managers only)
+app.post('/api/suggestions/:id/reject', requireManagerOrAdmin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  const suggestionId = req.params.id;
+  const { adminNotes } = req.body;
+
+  try {
+    // Get the suggestion
+    const suggestionResult = await pool.query(
+      'SELECT * FROM user_suggestions WHERE id = $1',
+      [suggestionId]
+    );
+
+    if (suggestionResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Suggestion not found' });
+    }
+
+    const suggestion = suggestionResult.rows[0];
+
+    if (suggestion.status !== 'pending') {
+      return res.status(400).json({ error: `Cannot reject ${suggestion.status} suggestion` });
+    }
+
+    // Update suggestion status to rejected
+    const result = await pool.query(
+      `UPDATE user_suggestions 
+       SET status = 'rejected', admin_reviewed_by = $1, admin_reviewed_at = NOW(), admin_notes = $2
+       WHERE id = $3
+       RETURNING *`,
+      [user.username, adminNotes, suggestionId]
+    );
+
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'SUGGESTION_REJECTED',
+      activityDescription: `Rejected ${suggestion.suggestion_type} suggestion from ${suggestion.username}. Reason: ${adminNotes}`,
+      tableName: 'user_suggestions',
+      recordId: suggestionId,
+      ipAddress,
+      userAgent,
+      requestData: { suggestion_id: suggestionId, adminNotes },
+      responseData: result.rows[0]
+    });
+
+    res.json({
+      message: 'Suggestion rejected',
+      suggestion: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error rejecting suggestion:', err);
     res.status(500).json({ error: err.message });
   }
 });

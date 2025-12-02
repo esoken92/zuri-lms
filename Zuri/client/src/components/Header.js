@@ -8,6 +8,7 @@ export default function Header({ user, onLogout, toggleDarkMode, isDark }) {
 
   const tabs = [
     { label: 'Dashboard', path: '/' },
+    { label: 'Home', path: '/home' },
     { label: 'Inspections', path: '/inspections' },
     { label: 'Reports', path: '/reports' },
     { label: 'Scrap', path: '/scrap' },

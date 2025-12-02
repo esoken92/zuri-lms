@@ -1,18 +1,30 @@
 import React, { useState } from 'react';
 import TabbedDatabasePanel from '../../components/admin/TabbedDatabasePanel';
+import SuggestionsPanel from '../../components/admin/SuggestionsPanel';
 import VehicleConfigBuilder from './VehicleConfigBuilder';
 
-function AdminDashboard() {
+function AdminDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('Dashboard');
 
   const tabs = [
-    { name: 'Dashboard', icon: '📊', color: 'blue' },
-    { name: 'Tyre Database', icon: '🛞', color: 'green' },
-    { name: 'Vehicle Configuration Database', icon: '🚚', color: 'purple' },
-    { name: 'Company Database', icon: '🏢', color: 'orange' },
-    { name: 'Depot Database', icon: '📍', color: 'red' },
-    { name: 'User Database', icon: '👥', color: 'indigo' },
+    { name: 'Dashboard', icon: '📊', color: 'blue-600' },
+    { name: 'User Suggestions', icon: '💡', color: 'cyan-600' },
+    { name: 'Tyre Database', icon: '🛞', color: 'green-600' },
+    { name: 'Vehicle Configuration Database', icon: '🚚', color: 'purple-600' },
+    { name: 'Company Database', icon: '🏢', color: 'orange-600' },
+    { name: 'Depot Database', icon: '📍', color: 'red-600' },
+    { name: 'User Database', icon: '👥', color: 'indigo-600' },
   ];
+
+  const colorMap = {
+    'blue-600': 'bg-blue-600',
+    'cyan-600': 'bg-cyan-600',
+    'green-600': 'bg-green-600',
+    'purple-600': 'bg-purple-600',
+    'orange-600': 'bg-orange-600',
+    'red-600': 'bg-red-600',
+    'indigo-600': 'bg-indigo-600',
+  };
 
   return (
     <div className="flex flex-col p-6 bg-gray-50 min-h-screen dark:bg-gray-900 gap-4">
@@ -30,8 +42,8 @@ function AdminDashboard() {
             onClick={() => setActiveTab(tab.name)}
             className={`px-4 py-3 rounded-lg font-semibold transition flex items-center gap-2 ${
               activeTab === tab.name
-                ? `bg-${tab.color}-600 text-white shadow-lg transform scale-105`
-                : `bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600`
+                ? `${colorMap[tab.color]} text-white shadow-lg transform scale-105`
+                : `bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600`
             }`}
           >
             <span className="text-lg">{tab.icon}</span>
@@ -50,6 +62,8 @@ function AdminDashboard() {
         <div className="p-6">
           {activeTab === 'Vehicle Configuration Database' ? (
             <VehicleConfigBuilder />
+          ) : activeTab === 'User Suggestions' ? (
+            <SuggestionsPanel user={user} />
           ) : (
             <TabbedDatabasePanel activeTab={activeTab} />
           )}
