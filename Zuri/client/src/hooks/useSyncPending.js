@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { syncOfflineDrafts } from '../services/drafts';
 
 function useSyncPending() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -12,8 +13,16 @@ function useSyncPending() {
   const cooldownTimeoutRef = useRef(null);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      console.log('[SYNC] Device came online - attempting to sync pending data...');
+      // Trigger sync when device comes back online
+      setTimeout(() => forceSync(), 500);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log('[SYNC] Device went offline - queuing changes locally');
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -41,21 +50,33 @@ function useSyncPending() {
 
   const forceSync = async () => {
     const pending = checkPending();
-    if (!navigator.onLine || pending.length === 0 || cooldownActive) return;
+    if (!navigator.onLine || (pending.length === 0) || cooldownActive) return;
 
     setSyncing(true);
     setSyncAttempt(0);
 
     const synced = [];
+    let draftSyncResult = null;
 
+    // First, sync offline drafts
+    try {
+      console.log('[SYNC] Syncing offline drafts...');
+      draftSyncResult = await syncOfflineDrafts();
+      console.log(`[SYNC] Draft sync complete: ${draftSyncResult.synced} synced, ${draftSyncResult.errors.length} errors`);
+    } catch (err) {
+      console.error('[SYNC] Draft sync failed:', err);
+    }
+
+    // Then sync inspection/scrap data
     for (const item of pending) {
       const currentAttempt = failCountRef.current + 1;
       setSyncAttempt(currentAttempt);
 
       try {
-        const res = await fetch(`${process.env.REACT_APP_API_URL}/inspections`, {
+        const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/inspections`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(item),
         });
 
@@ -84,6 +105,9 @@ function useSyncPending() {
       setLastSyncStatus('success');
     } else if (failCountRef.current > 0) {
       setLastSyncStatus('error');
+    } else if (draftSyncResult?.synced > 0) {
+      // Drafts synced successfully even if no pending inspections
+      setLastSyncStatus('success');
     }
 
     setSyncing(false);

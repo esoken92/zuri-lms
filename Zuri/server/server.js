@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { Parser } = require('json2csv');
+const crypto = require('crypto');
 const resetPasswordRoute = require('./routes/resetPassword');
 const resetConfirmRoute = require('./routes/resetConfirm');
 
@@ -46,10 +47,11 @@ async function checkDb() {
 }
 checkDb();
 
-// Simple migration runner: ensure 'scraps' table exists with appropriate schema
+// Simple migration runner: ensure tables exist with appropriate schema
 async function runMigrations() {
   try {
     console.log('[DB] Running migrations...');
+    
     const createScrapsSql = `
       CREATE TABLE IF NOT EXISTS "scraps" (
         id SERIAL PRIMARY KEY,
@@ -68,6 +70,143 @@ async function runMigrations() {
       );
     `;
     await pool.query(createScrapsSql);
+
+    const createCompaniesSql = `
+      CREATE TABLE IF NOT EXISTS "companies" (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        contact_name TEXT,
+        email TEXT,
+        phone TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await pool.query(createCompaniesSql);
+
+    const createDepotsSql = `
+      CREATE TABLE IF NOT EXISTS "depots" (
+        id SERIAL PRIMARY KEY,
+        location TEXT NOT NULL,
+        contact_name TEXT,
+        email TEXT,
+        phone TEXT,
+        company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await pool.query(createDepotsSql);
+
+    const createVehicleConfigsSql = `
+      CREATE TABLE IF NOT EXISTS "vehicle_configs" (
+        id SERIAL PRIMARY KEY,
+        item_code TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        tire_config TEXT,
+        tire_sizes JSONB,
+        ideal_pressures JSONB,
+        pressure_units JSONB,
+        spares INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await pool.query(createVehicleConfigsSql);
+
+    // User activity logging table
+    const createActivityLogSql = `
+      CREATE TABLE IF NOT EXISTS "user_activity_log" (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER,
+        username TEXT,
+        activity_type TEXT NOT NULL,
+        activity_description TEXT,
+        table_name TEXT,
+        record_id INTEGER,
+        ip_address TEXT,
+        user_agent TEXT,
+        browser TEXT,
+        device TEXT,
+        os TEXT,
+        language TEXT,
+        screen_resolution TEXT,
+        timezone TEXT,
+        success BOOLEAN DEFAULT true,
+        error_code TEXT,
+        error_message TEXT,
+        request_data JSONB,
+        response_data JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await pool.query(createActivityLogSql);
+
+    // Create index for faster queries
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_activity_user_id ON user_activity_log(user_id);
+      CREATE INDEX IF NOT EXISTS idx_activity_created_at ON user_activity_log(created_at);
+      CREATE INDEX IF NOT EXISTS idx_activity_type ON user_activity_log(activity_type);
+    `);
+
+    // User sessions tracking table
+    const createUserSessionsSql = `
+      CREATE TABLE IF NOT EXISTS "user_sessions" (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER,
+        username TEXT,
+        session_id TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        browser TEXT,
+        browser_version TEXT,
+        device TEXT,
+        device_type TEXT,
+        os TEXT,
+        os_version TEXT,
+        language TEXT,
+        languages JSONB,
+        screen_resolution TEXT,
+        viewport_size TEXT,
+        timezone TEXT,
+        platform TEXT,
+        cookie_enabled BOOLEAN,
+        do_not_track BOOLEAN,
+        login_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        logout_time TIMESTAMP WITH TIME ZONE,
+        session_duration INTEGER,
+        is_active BOOLEAN DEFAULT true
+      );
+    `;
+    await pool.query(createUserSessionsSql);
+
+    // Create indexes for sessions
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_sessions_is_active ON user_sessions(is_active);
+      CREATE INDEX IF NOT EXISTS idx_sessions_login_time ON user_sessions(login_time);
+    `);
+
+    // User drafts table (auto-saved form data for offline persistence)
+    const createUserDraftsSql = `
+      CREATE TABLE IF NOT EXISTS "user_drafts" (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        form_type TEXT NOT NULL,
+        form_name TEXT NOT NULL,
+        draft_data JSONB,
+        sync_status TEXT DEFAULT 'pending',
+        last_saved TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await pool.query(createUserDraftsSql);
+
+    // Create indexes for drafts
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_drafts_user_id ON user_drafts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_drafts_form_type ON user_drafts(form_type);
+      CREATE INDEX IF NOT EXISTS idx_drafts_last_saved ON user_drafts(last_saved);
+    `);
+
     console.log('[DB] migrations complete');
   } catch (err) {
     console.error('[DB] Migration failed:', err.message);
@@ -116,6 +255,112 @@ const logToFile = (username, message) => {
   }
 };
 
+// Helper to parse user agent
+const parseUserAgent = (userAgent) => {
+  if (!userAgent) return {};
+  
+  const ua = userAgent.toLowerCase();
+  let browser = 'Unknown', os = 'Unknown', device = 'Desktop';
+  
+  // Browser detection
+  if (ua.includes('edg/')) browser = 'Edge';
+  else if (ua.includes('chrome/')) browser = 'Chrome';
+  else if (ua.includes('firefox/')) browser = 'Firefox';
+  else if (ua.includes('safari/') && !ua.includes('chrome')) browser = 'Safari';
+  else if (ua.includes('opr/') || ua.includes('opera/')) browser = 'Opera';
+  
+  // OS detection
+  if (ua.includes('windows')) os = 'Windows';
+  else if (ua.includes('mac os')) os = 'macOS';
+  else if (ua.includes('linux')) os = 'Linux';
+  else if (ua.includes('android')) os = 'Android';
+  else if (ua.includes('iphone') || ua.includes('ipad')) os = 'iOS';
+  
+  // Device detection
+  if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) device = 'Mobile';
+  else if (ua.includes('tablet') || ua.includes('ipad')) device = 'Tablet';
+  
+  return { browser, os, device };
+};
+
+// Activity logging to database - SECURE (sanitizes sensitive data)
+const sanitizeForLogging = (obj) => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const safe = JSON.parse(JSON.stringify(obj));
+  const sensitiveFields = ['password', 'token', 'clientInfo', 'authToken', 'refreshToken', 'secret', 'api_key'];
+  const traverse = (val) => {
+    if (val && typeof val === 'object') {
+      Object.keys(val).forEach(k => {
+        if (sensitiveFields.some(s => k.toLowerCase().includes(s.toLowerCase()))) {
+          val[k] = '[REDACTED]';
+        } else {
+          traverse(val[k]);
+        }
+      });
+    }
+  };
+  traverse(safe);
+  return safe;
+};
+
+const logActivity = async (activityData) => {
+  try {
+    const {
+      userId,
+      username,
+      activityType,
+      activityDescription,
+      tableName,
+      recordId,
+      ipAddress,
+      userAgent,
+      success = true,
+      errorCode,
+      errorMessage,
+      requestData,
+      responseData,
+      clientInfo = {}
+    } = activityData;
+
+    const { browser, os, device } = parseUserAgent(userAgent);
+    
+    // Sanitize request/response to avoid logging sensitive data
+    const sanitizedRequest = requestData ? sanitizeForLogging(requestData) : null;
+    const sanitizedResponse = responseData ? sanitizeForLogging(responseData) : null;
+
+    await pool.query(`
+      INSERT INTO user_activity_log (
+        user_id, username, activity_type, activity_description, table_name, record_id,
+        ip_address, user_agent, browser, device, os, language, screen_resolution, timezone,
+        success, error_code, error_message, request_data, response_data
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+    `, [
+      userId, username, activityType, activityDescription, tableName, recordId,
+      ipAddress, userAgent, browser, device, os,
+      clientInfo.language, clientInfo.screenResolution, clientInfo.timezone,
+      success, errorCode, errorMessage,
+      sanitizedRequest ? JSON.stringify(sanitizedRequest) : null,
+      sanitizedResponse ? JSON.stringify(sanitizedResponse) : null
+    ]);
+
+    // Also log to file (with sanitized data)
+    const status = success ? 'SUCCESS' : 'FAILED';
+    const errorInfo = errorCode ? ` [${errorCode}] ${errorMessage}` : '';
+    logToFile(username, `${activityType}: ${activityDescription} - ${status}${errorInfo}`);
+  } catch (err) {
+    console.error('[LOG] Failed to log activity to database:', err.message);
+  }
+};
+
+// Helper to get client IP
+const getClientIp = (req) => {
+  return req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+         req.headers['x-real-ip'] ||
+         req.connection.remoteAddress ||
+         req.socket.remoteAddress ||
+         req.ip;
+};
+
 // Middleware
 app.use(cors({
   origin: function (origin, callback) {
@@ -128,17 +373,37 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
-app.use(express.static('uploads'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb' }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Generate secure session secret from env or crypto
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.SESSION_SECRET) {
+  console.warn('[SEC] WARNING: SESSION_SECRET not set in environment. Using random value (will reset on restart).');
+  console.warn('[SEC] For production, set SESSION_SECRET environment variable.');
+}
+
 app.use(session({
-  secret: 'zuri_secret_key',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'Strict',
+    maxAge: 1000 * 60 * 60 * 24
+  }
 }));
 
 // Attach username to request for logging (from session if authenticated)
 app.use((req, res, next) => {
   req.logUsername = req.session?.user?.username || 'anonymous';
+  // Add security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   next();
 });
 
@@ -163,18 +428,42 @@ app.use((req, res, next) => {
 app.use('/api/reset-password', resetPasswordRoute);
 app.use('/api/reset-password/confirm', resetConfirmRoute);
 
-// Multer storage config for photo uploads
+// Multer storage config for photo uploads - SECURE
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    const uploadsDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname) || '';
+    const unique = Date.now() + '-' + crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname).toLowerCase();
     cb(null, unique + ext);
   }
 });
-const upload = multer({ storage });
+
+// File filter: only allow images
+const fileFilter = (req, file, cb) => {
+  const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  
+  if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Invalid file type. Only images allowed. Got: ${file.mimetype}`));
+  }
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024
+  }
+});
 
 // Normalize keys: convert camelCase to snake_case, remove unsafe chars, lowercase
 const normalize = (s) => {
@@ -188,8 +477,8 @@ const normalize = (s) => {
   return out.toLowerCase();
 };
 
-// POST /upload - accepts multipart/form-data field `photo`
-app.post('/upload', upload.single('photo'), (req, res) => {
+// POST /upload - accepts multipart/form-data field `photo` (SECURE)
+app.post('/upload', requireLogin, upload.single('photo'), (req, res) => {
   const time = new Date().toISOString();
   if (!req.file) {
     const msg = `No file received`;
@@ -201,8 +490,7 @@ app.post('/upload', upload.single('photo'), (req, res) => {
     const msg = `Received file ${req.file.originalname} -> ${req.file.filename} (${req.file.size} bytes)`;
     console.log(`[UPLOAD] ${time} - ${msg}`);
     logToFile(req.logUsername, `[UPLOAD] ${msg}`);
-    const fileUrl = `${req.protocol}://${req.get('host')}/${req.file.filename}`;
-    return res.json({ path: fileUrl });
+    return res.json({ path: `/uploads/${req.file.filename}` });
   } catch (err) {
     const msg = `Error saving file: ${err.message}`;
     console.error(`[UPLOAD] ${time} - ${msg}`);
@@ -212,7 +500,7 @@ app.post('/upload', upload.single('photo'), (req, res) => {
 });
 
 // POST /inspections - accept inspection data and save to Postgres (creates table if missing)
-app.post('/inspections', async (req, res) => {
+app.post('/inspections', requireLogin, async (req, res) => {
   const time = new Date().toISOString();
   try {
     const data = req.body;
@@ -284,21 +572,133 @@ function requireAdmin(req, res, next) {
 
 // Auth Routes
 app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, clientInfo } = req.body;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     const user = rows[0];
+    
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      // Log failed login attempt
+      await logActivity({
+        userId: null,
+        username: username,
+        activityType: 'LOGIN_FAILED',
+        activityDescription: `Failed login attempt for username: ${username}`,
+        ipAddress: ipAddress,
+        userAgent: userAgent,
+        success: false,
+        errorCode: 'AUTH_001',
+        errorMessage: 'Invalid credentials',
+        clientInfo: clientInfo || {}
+      });
+      
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    
+    // Set session
     req.session.user = { id: user.id, username: user.username, role: user.role };
+    
+    // Parse user agent
+    const { browser, os, device } = parseUserAgent(userAgent);
+    
+    // Create session record with detailed client info
+    const sessionResult = await pool.query(`
+      INSERT INTO user_sessions (
+        user_id, username, session_id, ip_address, user_agent,
+        browser, browser_version, device, device_type, os, os_version,
+        language, languages, screen_resolution, viewport_size, timezone,
+        platform, cookie_enabled, do_not_track
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      RETURNING id
+    `, [
+      user.id,
+      user.username,
+      req.sessionID,
+      ipAddress,
+      userAgent,
+      browser,
+      clientInfo?.browserVersion || null,
+      device,
+      clientInfo?.deviceType || null,
+      os,
+      clientInfo?.osVersion || null,
+      clientInfo?.language || null,
+      clientInfo?.languages ? JSON.stringify(clientInfo.languages) : null,
+      clientInfo?.screenResolution || null,
+      clientInfo?.viewportSize || null,
+      clientInfo?.timezone || null,
+      clientInfo?.platform || null,
+      clientInfo?.cookieEnabled || null,
+      clientInfo?.doNotTrack || null
+    ]);
+    
+    // Log successful login
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'LOGIN_SUCCESS',
+      activityDescription: `User logged in successfully`,
+      ipAddress: ipAddress,
+      userAgent: userAgent,
+      success: true,
+      clientInfo: clientInfo || {},
+      responseData: { sessionId: sessionResult.rows[0].id }
+    });
+    
     res.json({ message: 'Logged in', user: req.session.user });
   } catch (err) {
+    // Log system error
+    await logActivity({
+      userId: null,
+      username: username,
+      activityType: 'LOGIN_ERROR',
+      activityDescription: `System error during login`,
+      ipAddress: ipAddress,
+      userAgent: userAgent,
+      success: false,
+      errorCode: 'SYS_001',
+      errorMessage: err.message,
+      clientInfo: clientInfo || {}
+    });
+    
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/logout', (req, res) => {
+app.post('/logout', async (req, res) => {
+  const user = req.session?.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  if (user) {
+    try {
+      // Update session record with logout time
+      await pool.query(`
+        UPDATE user_sessions
+        SET logout_time = NOW(),
+            session_duration = EXTRACT(EPOCH FROM (NOW() - login_time))::INTEGER,
+            is_active = false
+        WHERE session_id = $1 AND user_id = $2 AND is_active = true
+      `, [req.sessionID, user.id]);
+      
+      // Log logout
+      await logActivity({
+        userId: user.id,
+        username: user.username,
+        activityType: 'LOGOUT',
+        activityDescription: `User logged out`,
+        ipAddress: ipAddress,
+        userAgent: userAgent,
+        success: true
+      });
+    } catch (err) {
+      console.error('[LOGOUT] Error updating session:', err.message);
+    }
+  }
+  
   req.session.destroy(() => res.json({ message: 'Logged out' }));
 });
 
@@ -337,13 +737,23 @@ async function ensureTable(key, sampleRow) {
   }
 }
 
-// CRUD
+// Whitelist of allowed tables for dynamic access (security: prevent access to system tables)
+const ALLOWED_DYNAMIC_TABLES = ['scraps', 'inspections', 'companies', 'depots', 'vehicle_configs', 'tyres', 'vehicles'];
+
+const validateTableAccess = (key) => {
+  if (!ALLOWED_DYNAMIC_TABLES.includes(key)) {
+    throw new Error(`Access denied to table: ${key}. Not in whitelist.`);
+  }
+};
+
+// CRUD with table whitelist
 app.get('/api/table/:key', requireLogin, async (req, res) => {
   try {
+    validateTableAccess(req.params.key);
     const { rows } = await pool.query(`SELECT * FROM "${req.params.key}"`);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(403).json({ error: err.message });
   }
 });
 
@@ -354,6 +764,7 @@ app.post('/api/table/:key', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'No data provided' });
   }
   try {
+    validateTableAccess(key);
     await ensureTable(key, data[0]);
     await pool.query(`DELETE FROM "${key}"`);
     for (const row of data) {
@@ -364,26 +775,28 @@ app.post('/api/table/:key', requireAdmin, async (req, res) => {
     }
     res.sendStatus(200);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(403).json({ error: err.message });
   }
 });
 
 app.delete('/api/table/:key', requireAdmin, async (req, res) => {
   try {
+    validateTableAccess(req.params.key);
     await pool.query(`DROP TABLE IF EXISTS "${req.params.key}"`);
     res.sendStatus(200);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(403).json({ error: err.message });
   }
 });
 
 // Utility: Clear Table Only
 app.delete('/clear/:key', requireAdmin, async (req, res) => {
   try {
+    validateTableAccess(req.params.key);
     await pool.query(`DELETE FROM "${req.params.key}"`);
     res.sendStatus(200);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(403).json({ error: err.message });
   }
 });
 
@@ -556,9 +969,10 @@ app.post('/api/scraps', requireLogin, async (req, res) => {
 });
 
 
-// Export Data
+// Export Data - with table whitelist
 app.get('/export/:key', requireLogin, async (req, res) => {
   try {
+    validateTableAccess(req.params.key);
     const type = req.query.type || 'json';
     const { rows } = await pool.query(`SELECT * FROM "${req.params.key}"`);
     if (type === 'csv') {
@@ -571,7 +985,7 @@ app.get('/export/:key', requireLogin, async (req, res) => {
       res.json(rows);
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(403).json({ error: err.message });
   }
 });
 
@@ -585,6 +999,574 @@ app.get('/api/stats', requireLogin, async (req, res) => {
       total_vehicles: Number(vehicleTotal.rows[0].count)
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== DRAFT MANAGEMENT API =====
+// Drafts: auto-saved form data held on server, allows offline persistence and cross-device continuity
+
+// GET /api/drafts - List all drafts for authenticated user
+app.get('/api/drafts', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, form_type, form_name, last_saved, sync_status FROM user_drafts WHERE user_id = $1 ORDER BY last_saved DESC',
+      [req.session.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/drafts/:id - Retrieve specific draft
+app.get('/api/drafts/:id', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM user_drafts WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.session.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Draft not found' });
+    }
+    const draft = result.rows[0];
+    if (typeof draft.draft_data === 'string') {
+      draft.draft_data = JSON.parse(draft.draft_data);
+    }
+    res.json(draft);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/drafts/save - Save or update a draft
+app.post('/api/drafts/save', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { draftId, formType, formName, formData } = req.body;
+    
+    if (!formType || !formName) {
+      return res.status(400).json({ error: 'formType and formName are required' });
+    }
+    
+    if (draftId) {
+      // Update existing draft
+      const result = await pool.query(
+        `UPDATE user_drafts 
+         SET draft_data = $1, last_saved = NOW(), sync_status = 'pending'
+         WHERE id = $2 AND user_id = $3
+         RETURNING *`,
+        [JSON.stringify(formData), draftId, user.id]
+      );
+      
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Draft not found or not authorized' });
+      }
+      
+      await logActivity({
+        userId: user.id,
+        username: user.username,
+        activityType: 'DRAFT_UPDATE',
+        activityDescription: `Updated draft: ${formName}`,
+        tableName: 'user_drafts',
+        recordId: draftId,
+        ipAddress,
+        userAgent
+      });
+      
+      return res.json(result.rows[0]);
+    } else {
+      // Create new draft
+      const result = await pool.query(
+        `INSERT INTO user_drafts (user_id, form_type, form_name, draft_data, sync_status)
+         VALUES ($1, $2, $3, $4, 'pending')
+         RETURNING *`,
+        [user.id, formType, formName, JSON.stringify(formData)]
+      );
+      
+      await logActivity({
+        userId: user.id,
+        username: user.username,
+        activityType: 'DRAFT_CREATE',
+        activityDescription: `Created draft: ${formName}`,
+        tableName: 'user_drafts',
+        recordId: result.rows[0].id,
+        ipAddress,
+        userAgent
+      });
+      
+      return res.status(201).json(result.rows[0]);
+    }
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DRAFT_SAVE_FAILED',
+      activityDescription: `Failed to save draft`,
+      tableName: 'user_drafts',
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DRAFT_001',
+      errorMessage: err.message
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/drafts/:id - Delete a draft
+app.delete('/api/drafts/:id', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const result = await pool.query(
+      'DELETE FROM user_drafts WHERE id = $1 AND user_id = $2 RETURNING id',
+      [req.params.id, user.id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Draft not found or not authorized' });
+    }
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DRAFT_DELETE',
+      activityDescription: `Deleted draft ID: ${req.params.id}`,
+      tableName: 'user_drafts',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== COMPANIES API =====
+app.get('/api/companies', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM companies ORDER BY name');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/companies', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { name, contactName, email, phone } = req.body;
+    const result = await pool.query(
+      'INSERT INTO companies (name, contact_name, email, phone) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, contactName, email, phone]
+    );
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'CREATE',
+      activityDescription: `Created company: ${name}`,
+      tableName: 'companies',
+      recordId: result.rows[0].id,
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'CREATE_FAILED',
+      activityDescription: `Failed to create company`,
+      tableName: 'companies',
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_001',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/companies/:id', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { name, contactName, email, phone } = req.body;
+    const result = await pool.query(
+      'UPDATE companies SET name=$1, contact_name=$2, email=$3, phone=$4 WHERE id=$5 RETURNING *',
+      [name, contactName, email, phone, req.params.id]
+    );
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'UPDATE',
+      activityDescription: `Updated company: ${name}`,
+      tableName: 'companies',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'UPDATE_FAILED',
+      activityDescription: `Failed to update company ID: ${req.params.id}`,
+      tableName: 'companies',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_002',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/companies/:id', requireAdmin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    await pool.query('DELETE FROM companies WHERE id=$1', [req.params.id]);
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DELETE',
+      activityDescription: `Deleted company ID: ${req.params.id}`,
+      tableName: 'companies',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DELETE_FAILED',
+      activityDescription: `Failed to delete company ID: ${req.params.id}`,
+      tableName: 'companies',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_003',
+      errorMessage: err.message
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== DEPOTS API =====
+app.get('/api/depots', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM depots ORDER BY location');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/depots', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { location, contactName, email, phone, companyId } = req.body;
+    const result = await pool.query(
+      'INSERT INTO depots (location, contact_name, email, phone, company_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [location, contactName, email, phone, companyId]
+    );
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'CREATE',
+      activityDescription: `Created depot: ${location}`,
+      tableName: 'depots',
+      recordId: result.rows[0].id,
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'CREATE_FAILED',
+      activityDescription: `Failed to create depot`,
+      tableName: 'depots',
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_001',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/depots/:id', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { location, contactName, email, phone, companyId } = req.body;
+    const result = await pool.query(
+      'UPDATE depots SET location=$1, contact_name=$2, email=$3, phone=$4, company_id=$5 WHERE id=$6 RETURNING *',
+      [location, contactName, email, phone, companyId, req.params.id]
+    );
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'UPDATE',
+      activityDescription: `Updated depot: ${location}`,
+      tableName: 'depots',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'UPDATE_FAILED',
+      activityDescription: `Failed to update depot ID: ${req.params.id}`,
+      tableName: 'depots',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_002',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/depots/:id', requireAdmin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    await pool.query('DELETE FROM depots WHERE id=$1', [req.params.id]);
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DELETE',
+      activityDescription: `Deleted depot ID: ${req.params.id}`,
+      tableName: 'depots',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DELETE_FAILED',
+      activityDescription: `Failed to delete depot ID: ${req.params.id}`,
+      tableName: 'depots',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_003',
+      errorMessage: err.message
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== VEHICLE CONFIGS API =====
+app.get('/api/vehicle-configs', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM vehicle_configs ORDER BY item_code');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/vehicle-configs', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { itemCode, name, tireConfig, tireSizes, idealPressures, pressureUnits, spares } = req.body;
+    const result = await pool.query(
+      'INSERT INTO vehicle_configs (item_code, name, tire_config, tire_sizes, ideal_pressures, pressure_units, spares) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [itemCode, name, tireConfig, JSON.stringify(tireSizes || {}), JSON.stringify(idealPressures || {}), JSON.stringify(pressureUnits || {}), spares || 0]
+    );
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'CREATE',
+      activityDescription: `Created vehicle config: ${itemCode} - ${name}`,
+      tableName: 'vehicle_configs',
+      recordId: result.rows[0].id,
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'CREATE_FAILED',
+      activityDescription: `Failed to create vehicle config`,
+      tableName: 'vehicle_configs',
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_001',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/vehicle-configs/:id', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { itemCode, name, tireConfig, tireSizes, idealPressures, pressureUnits, spares } = req.body;
+    const result = await pool.query(
+      'UPDATE vehicle_configs SET item_code=$1, name=$2, tire_config=$3, tire_sizes=$4, ideal_pressures=$5, pressure_units=$6, spares=$7 WHERE id=$8 RETURNING *',
+      [itemCode, name, tireConfig, JSON.stringify(tireSizes || {}), JSON.stringify(idealPressures || {}), JSON.stringify(pressureUnits || {}), spares || 0, req.params.id]
+    );
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'UPDATE',
+      activityDescription: `Updated vehicle config: ${itemCode} - ${name}`,
+      tableName: 'vehicle_configs',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      requestData: req.body,
+      responseData: result.rows[0]
+    });
+    
+    res.json(result.rows[0]);
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'UPDATE_FAILED',
+      activityDescription: `Failed to update vehicle config ID: ${req.params.id}`,
+      tableName: 'vehicle_configs',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_002',
+      errorMessage: err.message,
+      requestData: req.body
+    });
+    
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/vehicle-configs/:id', requireAdmin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    await pool.query('DELETE FROM vehicle_configs WHERE id=$1', [req.params.id]);
+    
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DELETE',
+      activityDescription: `Deleted vehicle config ID: ${req.params.id}`,
+      tableName: 'vehicle_configs',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'DELETE_FAILED',
+      activityDescription: `Failed to delete vehicle config ID: ${req.params.id}`,
+      tableName: 'vehicle_configs',
+      recordId: parseInt(req.params.id),
+      ipAddress,
+      userAgent,
+      success: false,
+      errorCode: 'DB_003',
+      errorMessage: err.message
+    });
+    
     res.status(500).json({ error: err.message });
   }
 });

@@ -19,7 +19,23 @@ export default function LoginPage({ onLogin }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const user = await login(username, password);
+      // Collect client information for analytics
+      const clientInfo = {
+        language: navigator.language,
+        languages: navigator.languages || [navigator.language],
+        platform: navigator.platform,
+        userAgent: navigator.userAgent,
+        screenResolution: `${window.screen.width}x${window.screen.height}`,
+        viewportSize: `${window.innerWidth}x${window.innerHeight}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        cookieEnabled: navigator.cookieEnabled,
+        doNotTrack: navigator.doNotTrack === '1',
+        deviceType: /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+        browserVersion: navigator.userAgent.match(/(Chrome|Firefox|Safari|Edge)\/(\d+\.\d+)/)?.[2] || null,
+        osVersion: navigator.userAgent.match(/(Windows NT|Mac OS X|Android|iOS) ([\d._]+)/)?.[2] || null
+      };
+      
+      const user = await login(username, password, clientInfo);
       onLogin(user);
     } catch (err) {
       setError('Login failed');

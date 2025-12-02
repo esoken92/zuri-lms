@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import TabbedDatabasePanel from '../../components/admin/TabbedDatabasePanel';
+import VehicleConfigBuilder from './VehicleConfigBuilder';
 
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -47,7 +48,11 @@ function AdminDashboard() {
         </div>
 
         <div className="p-6">
-          <TabbedDatabasePanel activeTab={activeTab} />
+          {activeTab === 'Vehicle Configuration Database' ? (
+            <VehicleConfigBuilder />
+          ) : (
+            <TabbedDatabasePanel activeTab={activeTab} />
+          )}
         </div>
       </div>
     </div>

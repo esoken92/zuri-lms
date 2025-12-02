@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import CompanyForm from './CompanyForm';
+import DepotForm from './DepotForm';
 
 const tabMap = {
   'Tyre Database': 'tyres',
@@ -237,7 +239,13 @@ function TabbedDatabasePanel({ activeTab }) {
 
   return (
     <div>
-      {loading && <div className="h-1 w-full bg-blue-400 animate-pulse mb-2"></div>}
+      {activeTab === 'Company Database' ? (
+        <CompanyForm />
+      ) : activeTab === 'Depot Database' ? (
+        <DepotForm />
+      ) : (
+        <>
+          {loading && <div className="h-1 w-full bg-blue-400 animate-pulse mb-2"></div>}
       {syncStatus && (
         <div className={`text-sm p-2 rounded mb-2 ${
           syncStatus === 'success' ? 'bg-green-200 text-green-800' :
@@ -346,6 +354,8 @@ function TabbedDatabasePanel({ activeTab }) {
           ))}
         </ul>
       </div>
+        </>
+      )}
     </div>
   );
 }

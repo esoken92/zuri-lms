@@ -5,3 +5,12 @@
 [2025-12-02T12:56:20.561Z] [INSPECT] Saving inspection for vehicleId=12321
 [2025-12-02T12:56:20.608Z] [INSPECT] Inspection saved successfully
 [2025-12-02T12:56:20.609Z] [RES] POST /inspections status=200
+[2025-12-02T14:16:29.333Z] [REQ] GET /me from ::1 bodyKeys=0
+[2025-12-02T14:16:41.828Z] [REQ] POST /login from ::1 bodyKeys=2
+[2025-12-02T14:16:42.060Z] [RES] POST /login status=200
+[2025-12-02T19:01:20.164Z] [REQ] GET /api/table/tyres from ::1 bodyKeys=0
+[2025-12-02T19:01:20.167Z] [RES] GET /api/table/tyres status=401
+[2025-12-02T19:01:20.175Z] [REQ] GET /api/inspections from ::1 bodyKeys=0
+[2025-12-02T19:03:23.188Z] [REQ] GET /me from ::1 bodyKeys=0
+[2025-12-02T19:03:33.183Z] [REQ] POST /login from ::1 bodyKeys=3
+[2025-12-02T19:03:33.605Z] [RES] POST /login status=200

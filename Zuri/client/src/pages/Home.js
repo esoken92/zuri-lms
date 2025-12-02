@@ -38,6 +38,13 @@ function Home({ inspections, setInspections, user }) {
   const [trailer1Type, setTrailer1Type] = useState(null);
   const [trailer2Type, setTrailer2Type] = useState(null);
 
+  // Database lookups
+  const [companies, setCompanies] = useState([]);
+  const [depots, setDepots] = useState([]);
+  const [vehicleConfigs, setVehicleConfigs] = useState([]);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customCustomer, setCustomCustomer] = useState({ name: '', phone: '', email: '' });
+
   // Tire Item form (individual tire)
   const [itemFormData, setItemFormData] = useState({
     tirePosition: '',
@@ -103,7 +110,52 @@ function Home({ inspections, setInspections, user }) {
   // Fetch inspection surveys on mount
   useEffect(() => {
     fetchInspectionSurveys();
+    fetchCompanies();
+    fetchDepots();
+    fetchVehicleConfigs();
   }, []);
+
+  const fetchCompanies = async () => {
+    try {
+      const res = await axios.get(`${BASE_URL}/api/companies`, { withCredentials: true });
+      setCompanies(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch companies:', err);
+    }
+  };
+
+  const fetchDepots = async () => {
+    try {
+      const res = await axios.get(`${BASE_URL}/api/depots`, { withCredentials: true });
+      setDepots(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch depots:', err);
+    }
+  };
+
+  const fetchVehicleConfigs = async () => {
+    try {
+      const res = await axios.get(`${BASE_URL}/api/vehicle-configs`, { withCredentials: true });
+      setVehicleConfigs(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch vehicle configs:', err);
+    }
+  };
+
+  const handleSaveCustomCustomer = () => {
+    if (!customCustomer.name) {
+      alert('Customer name is required');
+      return;
+    }
+    setSurveyFormData({
+      ...surveyFormData,
+      customerName: customCustomer.name,
+      customerPhone: customCustomer.phone,
+      customerEmail: customCustomer.email,
+    });
+    setShowCustomerModal(false);
+    setCustomCustomer({ name: '', phone: '', email: '' });
+  };
 
   const fetchInspectionSurveys = async () => {
     try {
@@ -437,29 +489,51 @@ function Home({ inspections, setInspections, user }) {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Customer Name *
+                    Company *
                   </label>
-                  <input
-                    type="text"
-                    name="customerName"
-                    value={surveyFormData.customerName}
-                    onChange={(e) => setSurveyFormData({ ...surveyFormData, customerName: e.target.value })}
-                    placeholder="Enter name"
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={surveyFormData.customerName}
+                      onChange={(e) => {
+                        const company = companies.find(c => c.name === e.target.value);
+                        setSurveyFormData({
+                          ...surveyFormData,
+                          customerName: e.target.value,
+                          customerPhone: company?.phone || '',
+                          customerEmail: company?.email || '',
+                        });
+                      }}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">Select Company</option>
+                      {companies.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerModal(true)}
+                      className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xl"
+                      title="Add Custom Customer"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    Location *
+                    Depot *
                   </label>
-                  <input
-                    type="text"
-                    name="location"
+                  <select
                     value={surveyFormData.location}
                     onChange={(e) => setSurveyFormData({ ...surveyFormData, location: e.target.value })}
-                    placeholder="Enter location"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+                  >
+                    <option value="">Select Depot</option>
+                    {depots.map(d => (
+                      <option key={d.id} value={d.location}>{d.location}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -518,6 +592,52 @@ function Home({ inspections, setInspections, user }) {
               <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Vehicle Configuration</h3>
                 <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Vehicle Config (Searchable by Code)
+                    </label>
+                    <select
+                      value={surveyFormData.vehicleId}
+                      onChange={(e) => {
+                        const config = vehicleConfigs.find(vc => (vc.item_code || vc.itemCode) === e.target.value);
+                        if (config) {
+                          setSurveyFormData({ ...surveyFormData, vehicleId: e.target.value });
+                          // Could auto-load config here if needed
+                        }
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">Select Vehicle Config</option>
+                      {vehicleConfigs.map(vc => (
+                        <option key={vc.id} value={vc.item_code || vc.itemCode}>
+                          {vc.item_code || vc.itemCode} - {vc.name}
+                          {(vc.tire_config || vc.tireConfig) && ` [${vc.tire_config || vc.tireConfig}]`}
+                          {(vc.spares > 0) && ` +${vc.spares}sp`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Or Manual Vehicle Type
+                    </label>
+                    <select
+                      value={vehicleType}
+                      onChange={(e) => {
+                        setVehicleType(e.target.value);
+                        setTireItems([]);
+                        setSelectedTireId(null);
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value={VEHICLE_TYPES.CAR}>Car (2x2)</option>
+                      <option value={VEHICLE_TYPES.TRUCK_2AXLE}>Truck 2-Axle</option>
+                      <option value={VEHICLE_TYPES.TRUCK_3AXLE}>Truck 3-Axle</option>
+                      <option value={VEHICLE_TYPES.TRACTOR}>Tractor</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                       Vehicle Type
@@ -778,6 +898,64 @@ function Home({ inspections, setInspections, user }) {
           </div>
         )}
       </div>
+
+      {/* Custom Customer Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Add Custom Customer</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block font-semibold mb-2">Customer Name *</label>
+                <input
+                  type="text"
+                  value={customCustomer.name}
+                  onChange={(e) => setCustomCustomer({ ...customCustomer, name: e.target.value })}
+                  placeholder="Enter customer name"
+                  className="w-full px-3 py-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Phone</label>
+                <input
+                  type="tel"
+                  value={customCustomer.phone}
+                  onChange={(e) => setCustomCustomer({ ...customCustomer, phone: e.target.value })}
+                  placeholder="Phone number"
+                  className="w-full px-3 py-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Email</label>
+                <input
+                  type="email"
+                  value={customCustomer.email}
+                  onChange={(e) => setCustomCustomer({ ...customCustomer, email: e.target.value })}
+                  placeholder="Email address"
+                  className="w-full px-3 py-2 border rounded"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={handleSaveCustomCustomer}
+                className="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700"
+              >
+                Add Customer
+              </button>
+              <button
+                onClick={() => {
+                  setShowCustomerModal(false);
+                  setCustomCustomer({ name: '', phone: '', email: '' });
+                }}
+                className="flex-1 bg-gray-400 text-white py-2 rounded hover:bg-gray-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
