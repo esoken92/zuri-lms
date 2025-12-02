@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import InspectionForm from '../components/InspectionForm';
+import InspectionFormNew from '../components/inspection/InspectionFormNew';
 import Toast from '../components/Toast';
 
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -119,7 +119,7 @@ function InspectionsPage({ user }) {
         >
           ← Back to Inspections
         </button>
-        <InspectionForm
+        <InspectionFormNew
           user={user}
           initialData={editingInspection}
           onSubmit={handleFormSubmit}

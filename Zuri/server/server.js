@@ -218,6 +218,74 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_drafts_last_saved ON user_drafts(last_saved);
     `);
 
+    // Add columns to tyres table for triple depth readings if they don't exist
+    try {
+      await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthInner" NUMERIC(5,2);`);
+      await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthMiddle" NUMERIC(5,2);`);
+      await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthOuter" NUMERIC(5,2);`);
+      await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "comments" TEXT;`);
+    } catch (alterErr) {
+      // Column might already exist, which is fine
+      console.log('[DB] Tire columns update (expected if already exist):', alterErr.message);
+    }
+
+    // Create inspections_drafts table for auto-save functionality
+    const createInspectionsDraftsSql = `
+      CREATE TABLE IF NOT EXISTS "inspections_drafts" (
+        id SERIAL PRIMARY KEY,
+        draft_id TEXT UNIQUE NOT NULL,
+        user_id INTEGER NOT NULL,
+        header JSONB NOT NULL,
+        vehicles JSONB NOT NULL,
+        last_saved TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await pool.query(createInspectionsDraftsSql);
+
+    // Create indexes for drafts
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_inspections_drafts_draft_id ON inspections_drafts(draft_id);
+      CREATE INDEX IF NOT EXISTS idx_inspections_drafts_user_id ON inspections_drafts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_inspections_drafts_last_saved ON inspections_drafts(last_saved);
+    `);
+
+    // Create vehicle_configurations table if it doesn't exist
+    const createVehicleConfigurationsSql = `
+      CREATE TABLE IF NOT EXISTS "vehicle_configurations" (
+        id SERIAL PRIMARY KEY,
+        code TEXT UNIQUE NOT NULL,
+        positionName TEXT NOT NULL,
+        tireCount INTEGER DEFAULT 4,
+        status TEXT DEFAULT 'approved',
+        suggestedBy TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+    await pool.query(createVehicleConfigurationsSql);
+
+    // Create configuration_suggestions table for user suggestions
+    const createConfigSuggestionsSql = `
+      CREATE TABLE IF NOT EXISTS "configuration_suggestions" (
+        id SERIAL PRIMARY KEY,
+        code TEXT NOT NULL,
+        positionName TEXT NOT NULL,
+        tireCount INTEGER DEFAULT 4,
+        suggestedBy TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        admin_notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        approved_at TIMESTAMP WITH TIME ZONE
+      );
+    `;
+    await pool.query(createConfigSuggestionsSql);
+
+    // Create indexes
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_vehicle_configs_code ON vehicle_configurations(code);
+      CREATE INDEX IF NOT EXISTS idx_config_suggestions_status ON configuration_suggestions(status);
+    `);
+
     console.log('[DB] migrations complete');
   } catch (err) {
     console.error('[DB] Migration failed:', err.message);
@@ -618,6 +686,240 @@ app.post('/inspections', requireLogin, async (req, res) => {
     console.error(`[INSPECT] ${time} - ${errMsg}`);
     logToFile(req.logUsername, `[INSPECT] ${errMsg}`);
     res.status(500).json({ error: 'Failed to save inspection', details: err.message });
+  }
+});
+
+// ===== NEW MULTI-VEHICLE INSPECTION API =====
+
+// POST /api/inspections - NEW multi-vehicle inspection submission
+app.post('/api/inspections', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers['user-agent'];
+  
+  try {
+    const { header, vehicles, timestamp } = req.body;
+
+    // Validate required fields
+    if (!header || !vehicles || !Array.isArray(vehicles) || vehicles.length === 0) {
+      return res.status(400).json({ error: 'Invalid inspection data: header and vehicles array required' });
+    }
+
+    if (!header.companyId || !header.depotId || !header.date || !header.location) {
+      return res.status(400).json({ error: 'Missing required header fields: companyId, depotId, date, location' });
+    }
+
+    // Insert into inspections table (dynamic schema)
+    const inspectionData = {
+      user_id: user.id,
+      user_name: user.username,
+      company_id: header.companyId,
+      depot_id: header.depotId,
+      inspection_date: header.date,
+      location: header.location,
+      header: JSON.stringify(header),
+      vehicles: JSON.stringify(vehicles),
+      timestamp,
+      created_at: new Date().toISOString(),
+    };
+
+    const cols = Object.keys(inspectionData);
+    const values = Object.values(inspectionData);
+    const placeholders = cols.map((_, i) => `$${i + 1}`);
+    const insertSql = `INSERT INTO "inspections" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`;
+
+    const result = await pool.query(insertSql, values);
+    const inspectionId = result.rows[0].id;
+
+    // Log activity
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'INSPECTION_SUBMITTED',
+      activityDescription: `Submitted multi-vehicle inspection with ${vehicles.length} vehicle(s)`,
+      tableName: 'inspections',
+      recordId: inspectionId,
+      ipAddress,
+      userAgent,
+      requestData: { vehicleCount: vehicles.length, location: header.location },
+      success: true
+    });
+
+    res.status(201).json({ 
+      message: 'Inspection submitted successfully',
+      inspectionId,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('[INSPECT] POST /api/inspections failed:', err.message);
+    await logActivity({
+      userId: user.id,
+      username: user.username,
+      activityType: 'INSPECTION_SUBMIT_ERROR',
+      activityDescription: `Failed to submit inspection: ${err.message}`,
+      tableName: 'inspections',
+      ipAddress,
+      userAgent,
+      errorCode: 'INSPECT_SUBMIT_FAILED',
+      errorMessage: err.message,
+      success: false
+    });
+    res.status(500).json({ error: 'Failed to submit inspection', details: err.message });
+  }
+});
+
+// GET /api/inspections - List all inspections for authenticated user (filtered by role)
+app.get('/api/inspections', requireLogin, async (req, res) => {
+  try {
+    let query = 'SELECT * FROM inspections WHERE 1=1';
+    const params = [];
+
+    // Filter by user role
+    if (req.session.user.role !== 'Administrator' && req.session.user.role !== 'Group Manager') {
+      query += ' AND user_id = $1';
+      params.push(req.session.user.id);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT 500';
+    const result = await pool.query(query, params);
+    
+    // Parse JSON fields
+    const inspections = result.rows.map(row => ({
+      ...row,
+      header: typeof row.header === 'string' ? JSON.parse(row.header) : row.header,
+      vehicles: typeof row.vehicles === 'string' ? JSON.parse(row.vehicles) : row.vehicles,
+    }));
+
+    res.json(inspections);
+  } catch (err) {
+    console.error('[INSPECT] GET /api/inspections failed:', err.message);
+    res.status(500).json({ error: 'Failed to fetch inspections', details: err.message });
+  }
+});
+
+// GET /api/inspections/:id - Get specific inspection
+app.get('/api/inspections/:id', requireLogin, async (req, res) => {
+  try {
+    let query = 'SELECT * FROM inspections WHERE id = $1';
+    const params = [req.params.id];
+
+    // Add user filter if not admin
+    if (req.session.user.role !== 'Administrator' && req.session.user.role !== 'Group Manager') {
+      query += ' AND user_id = $2';
+      params.push(req.session.user.id);
+    }
+
+    const result = await pool.query(query, params);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Inspection not found' });
+    }
+
+    const row = result.rows[0];
+    const inspection = {
+      ...row,
+      header: typeof row.header === 'string' ? JSON.parse(row.header) : row.header,
+      vehicles: typeof row.vehicles === 'string' ? JSON.parse(row.vehicles) : row.vehicles,
+    };
+
+    res.json(inspection);
+  } catch (err) {
+    console.error('[INSPECT] GET /api/inspections/:id failed:', err.message);
+    res.status(500).json({ error: 'Failed to fetch inspection', details: err.message });
+  }
+});
+
+// POST /api/drafts/inspection - Create new inspection draft
+app.post('/api/drafts/inspection', requireLogin, async (req, res) => {
+  const user = req.session.user;
+  
+  try {
+    const { draftId, header, vehicles } = req.body;
+
+    if (!draftId || !header || !vehicles) {
+      return res.status(400).json({ error: 'Missing required fields: draftId, header, vehicles' });
+    }
+
+    // Check if draft exists
+    const existing = await pool.query(
+      'SELECT id FROM inspections_drafts WHERE draft_id = $1',
+      [draftId]
+    );
+
+    if (existing.rows.length > 0) {
+      // Update existing draft
+      await pool.query(
+        'UPDATE inspections_drafts SET header = $1, vehicles = $2, last_saved = NOW() WHERE draft_id = $3 AND user_id = $4',
+        [JSON.stringify(header), JSON.stringify(vehicles), draftId, user.id]
+      );
+    } else {
+      // Create new draft
+      await pool.query(
+        'INSERT INTO inspections_drafts (draft_id, user_id, header, vehicles) VALUES ($1, $2, $3, $4)',
+        [draftId, user.id, JSON.stringify(header), JSON.stringify(vehicles)]
+      );
+    }
+
+    res.json({ message: 'Draft saved', draftId, lastSaved: new Date().toISOString() });
+  } catch (err) {
+    console.error('[DRAFT] POST /api/drafts/inspection failed:', err.message);
+    res.status(500).json({ error: 'Failed to save draft', details: err.message });
+  }
+});
+
+// GET /api/drafts/inspection/:draftId - Retrieve inspection draft
+app.get('/api/drafts/inspection/:draftId', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM inspections_drafts WHERE draft_id = $1 AND user_id = $2',
+      [req.params.draftId, req.session.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Draft not found' });
+    }
+
+    const draft = result.rows[0];
+    draft.header = typeof draft.header === 'string' ? JSON.parse(draft.header) : draft.header;
+    draft.vehicles = typeof draft.vehicles === 'string' ? JSON.parse(draft.vehicles) : draft.vehicles;
+
+    res.json(draft);
+  } catch (err) {
+    console.error('[DRAFT] GET /api/drafts/inspection/:draftId failed:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve draft', details: err.message });
+  }
+});
+
+// DELETE /api/drafts/inspection/:draftId - Delete inspection draft
+app.delete('/api/drafts/inspection/:draftId', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM inspections_drafts WHERE draft_id = $1 AND user_id = $2',
+      [req.params.draftId, req.session.user.id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Draft not found' });
+    }
+
+    res.json({ message: 'Draft deleted' });
+  } catch (err) {
+    console.error('[DRAFT] DELETE /api/drafts/inspection/:draftId failed:', err.message);
+    res.status(500).json({ error: 'Failed to delete draft', details: err.message });
+  }
+});
+
+// GET /api/table/vehicle-configurations - Get vehicle configurations
+app.get('/api/table/vehicle-configurations', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM vehicle_configurations WHERE status = $1 ORDER BY code',
+      ['approved']
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[CONFIG] GET /api/table/vehicle-configurations failed:', err.message);
+    res.status(500).json({ error: 'Failed to fetch configurations', details: err.message });
   }
 });
 

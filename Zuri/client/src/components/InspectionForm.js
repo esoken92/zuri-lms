@@ -156,7 +156,16 @@ function InspectionForm({ onSubmit, user, initialData = null }) {
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
-    const updated = { ...headerData, [name]: value };
+    let updated = { ...headerData, [name]: value };
+    
+    // Auto-populate customerName from selected company
+    if (name === 'companyId' && value) {
+      const selectedCompany = companies.find(c => c.id === parseInt(value));
+      if (selectedCompany) {
+        updated.customerName = selectedCompany.name;
+      }
+    }
+    
     setHeaderData(updated);
     setTimeout(saveDraft, 100);
   };
@@ -356,8 +365,8 @@ function InspectionForm({ onSubmit, user, initialData = null }) {
     try {
       setError('');
 
-      if (!headerData.vehicleId || !headerData.customerName || !headerData.location) {
-        setError('Please fill in Vehicle ID, Customer Name, and Location');
+      if (!headerData.vehicleId || !headerData.companyId || !headerData.location) {
+        setError('Please fill in Vehicle ID, Company, and Location');
         return;
       }
 
@@ -368,6 +377,7 @@ function InspectionForm({ onSubmit, user, initialData = null }) {
 
       const payload = {
         ...headerData,
+        customerName: headerData.customerName || companies.find(c => c.id === parseInt(headerData.companyId))?.name || '',
         items: tireItems,
         spares: spareItems,
         timestamp: new Date().toISOString(),
@@ -419,38 +429,78 @@ function InspectionForm({ onSubmit, user, initialData = null }) {
     }
   };
 
-  const handleManualCompanySave = () => {
+  const handleManualCompanySave = async () => {
     if (!manualCompanyData.name.trim()) {
       setToast({ type: 'error', message: 'Company name is required' });
       return;
     }
-    // Add manual company data to form
-    setHeaderData({
-      ...headerData,
-      customerName: manualCompanyData.name,
-    });
-    // Add to companies list for future use
-    setCompanies([...companies, { id: Date.now(), name: manualCompanyData.name, phone: manualCompanyData.phone, email: manualCompanyData.email }]);
-    setManualCompanyData({ name: '', phone: '', email: '' });
-    setManualEntryModals(prev => ({ ...prev, company: false }));
-    setToast({ type: 'success', message: 'Company added successfully' });
+    try {
+      // Auto-add to suggestions/unvetted database
+      await axios.post(`${BASE_URL}/api/suggestions`, {
+        type: 'company',
+        data: manualCompanyData,
+        status: 'pending',
+        suggestedBy: user?.username || 'anonymous',
+        timestamp: new Date().toISOString(),
+      }, { withCredentials: true }).catch(() => {
+        // If API fails, still add to local list
+        console.warn('Could not submit suggestion to server');
+      });
+      
+      // Add to companies list for immediate use
+      const newCompany = { id: Date.now(), ...manualCompanyData, status: 'unvetted' };
+      setCompanies([...companies, newCompany]);
+      
+      // Auto-select the new company
+      setHeaderData({
+        ...headerData,
+        companyId: newCompany.id,
+        customerName: manualCompanyData.name,
+      });
+      
+      setManualCompanyData({ name: '', phone: '', email: '' });
+      setManualEntryModals(prev => ({ ...prev, company: false }));
+      setToast({ type: 'success', message: 'Company added and pending admin review' });
+    } catch (err) {
+      setToast({ type: 'error', message: `Error adding company: ${err.message}` });
+    }
   };
 
-  const handleManualDepotSave = () => {
+  const handleManualDepotSave = async () => {
     if (!manualDepotData.location.trim()) {
       setToast({ type: 'error', message: 'Depot location is required' });
       return;
     }
-    // Add manual depot data to form
-    setHeaderData({
-      ...headerData,
-      location: manualDepotData.location,
-    });
-    // Add to depots list for future use
-    setDepots([...depots, { id: Date.now(), location: manualDepotData.location, region: manualDepotData.region }]);
-    setManualDepotData({ location: '', region: '' });
-    setManualEntryModals(prev => ({ ...prev, depot: false }));
-    setToast({ type: 'success', message: 'Depot added successfully' });
+    try {
+      // Auto-add to suggestions/unvetted database
+      await axios.post(`${BASE_URL}/api/suggestions`, {
+        type: 'depot',
+        data: manualDepotData,
+        status: 'pending',
+        suggestedBy: user?.username || 'anonymous',
+        timestamp: new Date().toISOString(),
+      }, { withCredentials: true }).catch(() => {
+        // If API fails, still add to local list
+        console.warn('Could not submit suggestion to server');
+      });
+      
+      // Add to depots list for immediate use
+      const newDepot = { id: Date.now(), ...manualDepotData, status: 'unvetted' };
+      setDepots([...depots, newDepot]);
+      
+      // Auto-select the new depot
+      setHeaderData({
+        ...headerData,
+        depotId: newDepot.id,
+        location: manualDepotData.location,
+      });
+      
+      setManualDepotData({ location: '', region: '' });
+      setManualEntryModals(prev => ({ ...prev, depot: false }));
+      setToast({ type: 'success', message: 'Depot added and pending admin review' });
+    } catch (err) {
+      setToast({ type: 'error', message: `Error adding depot: ${err.message}` });
+    }
   };
 
   return (
@@ -519,20 +569,6 @@ function InspectionForm({ onSubmit, user, initialData = null }) {
                 </button>
               )}
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              Customer Name *
-            </label>
-            <input
-              type="text"
-              name="customerName"
-              value={headerData.customerName}
-              onChange={handleHeaderChange}
-              placeholder="Enter customer name"
-              required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-            />
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
