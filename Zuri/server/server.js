@@ -99,10 +99,23 @@ async function runMigrations() {
     const createTyresSql = `
       CREATE TABLE IF NOT EXISTS "tyres" (
         id SERIAL PRIMARY KEY,
-        brand TEXT NOT NULL,
-        size TEXT NOT NULL,
-        type TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        brand VARCHAR(100) NOT NULL,
+        pattern VARCHAR(100) NOT NULL,
+        "Ply Rating" VARCHAR(50),
+        "Original Tread Depth" VARCHAR(50),
+        "Load Rating" VARCHAR(50),
+        "Load Rating Duals" VARCHAR(50),
+        "Load Rating Singles" VARCHAR(50),
+        "Speed Rating Duals" VARCHAR(10),
+        "Speed Rating Singles" VARCHAR(10),
+        "Tube Rating" VARCHAR(10),
+        "Nominal Section Width" VARCHAR(50),
+        "Aspect Ratio" VARCHAR(50),
+        "Rim Size" VARCHAR(50),
+        "Product Code" VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(brand, pattern, "Nominal Section Width", "Aspect Ratio", "Rim Size")
       );
     `;
     await pool.query(createTyresSql);
@@ -286,7 +299,147 @@ async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_config_suggestions_status ON configuration_suggestions(status);
     `);
 
-    console.log('[DB] migrations complete');
+    // Create scrap_data table
+    const createScrapDataSql = `
+      CREATE TABLE IF NOT EXISTS "scrap_data" (
+        id SERIAL PRIMARY KEY,
+        location VARCHAR(100) NOT NULL,
+        damage_code VARCHAR(50) NOT NULL,
+        damage_description TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(location, damage_code)
+      )
+    `;
+    await pool.query(createScrapDataSql);
+
+    // Create index on scrap_data
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_scrap_data_location ON scrap_data(location)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_scrap_data_code ON scrap_data(damage_code)');
+
+    // Seed scrap_data table if empty
+    const checkScrapData = await pool.query('SELECT COUNT(*) as count FROM scrap_data');
+    console.log('[DB] Scrap data count:', checkScrapData.rows[0].count);
+    if (checkScrapData.rows[0].count == 0 || checkScrapData.rows[0].count === '0') {
+      console.log('[DB] Seeding scrap_data table...');
+      const scrapDataRecords = [
+        // TREAD
+        { location: 'TREAD', code: 'TR-1', description: 'Puncture/Cut (To Interior)' },
+        { location: 'TREAD', code: 'TR-2', description: 'Puncture/Cut (Not To Interior)' },
+        { location: 'TREAD', code: 'TR-3', description: 'Chipping/Chunking' },
+        { location: 'TREAD', code: 'TR-4', description: 'Cut Separation' },
+        { location: 'TREAD', code: 'TR-5', description: 'Impact Break' },
+        { location: 'TREAD', code: 'TR-6', description: 'Stone Retention Damage' },
+        { location: 'TREAD', code: 'TR-7', description: 'Brake Lock/Chipping' },
+        { location: 'TREAD', code: 'TR-8', description: 'Irregular Wear' },
+        { location: 'TREAD', code: 'TR-9', description: 'Worn Too Far' },
+        { location: 'TREAD', code: 'TR-10', description: 'Defense Groove Tearing' },
+        { location: 'TREAD', code: 'TR-11', description: 'Rib/Lug Tearing' },
+        { location: 'TREAD', code: 'TR-12', description: 'Groove Cracking' },
+        { location: 'TREAD', code: 'TR-13', description: 'Open Splice' },
+        { location: 'TREAD', code: 'TR-14', description: 'Tread Leaving Belt' },
+        { location: 'TREAD', code: 'TR-15', description: 'Belt Leaving Belt' },
+        { location: 'TREAD', code: 'TR-16', description: 'Belt Leaving Casing' },
+        { location: 'TREAD', code: 'TR-17', description: 'Other (Explain In Comments)' },
+        // SHOULDER
+        { location: 'SHOULDER', code: 'SH-1', description: 'Puncture/Cut (To Interior)' },
+        { location: 'SHOULDER', code: 'SH-2', description: 'Puncture/Cut (Not To Interior)' },
+        { location: 'SHOULDER', code: 'SH-3', description: 'Diagonal Cracking' },
+        { location: 'SHOULDER', code: 'SH-4', description: 'Circumferential Crack' },
+        { location: 'SHOULDER', code: 'SH-5', description: 'Ozone Cracking' },
+        { location: 'SHOULDER', code: 'SH-6', description: 'Radial Split' },
+        { location: 'SHOULDER', code: 'SH-7', description: 'Migrating Wire' },
+        { location: 'SHOULDER', code: 'SH-8', description: 'Abuse/Heat Separation' },
+        { location: 'SHOULDER', code: 'SH-9', description: 'Separation' },
+        { location: 'SHOULDER', code: 'SH-10', description: 'Belt Edge Separation' },
+        { location: 'SHOULDER', code: 'SH-11', description: 'Other (Explain In Comments)' },
+        // SIDEWALL
+        { location: 'SIDEWALL', code: 'SW-1', description: 'Puncture/Cut (To Interior)' },
+        { location: 'SIDEWALL', code: 'SW-2', description: 'Puncture/Cut (Not To Interior)' },
+        { location: 'SIDEWALL', code: 'SW-3', description: 'Impact Break' },
+        { location: 'SIDEWALL', code: 'SW-4', description: 'Curbing Damage' },
+        { location: 'SIDEWALL', code: 'SW-5', description: 'Runflat Damage' },
+        { location: 'SIDEWALL', code: 'SW-6', description: 'Diagonal Cracking' },
+        { location: 'SIDEWALL', code: 'SW-7', description: 'Circumferential Cracking' },
+        { location: 'SIDEWALL', code: 'SW-8', description: 'Ozone Cracking' },
+        { location: 'SIDEWALL', code: 'SW-9', description: 'Cord Fatigue/CSU' },
+        { location: 'SIDEWALL', code: 'SW-10', description: 'Open Splice' },
+        { location: 'SIDEWALL', code: 'SW-11', description: 'Distorted Ply Cords' },
+        { location: 'SIDEWALL', code: 'SW-12', description: 'Bulge/Blister' },
+        { location: 'SIDEWALL', code: 'SW-13', description: 'Separation' },
+        { location: 'SIDEWALL', code: 'SW-14', description: 'Cut Separation' },
+        { location: 'SIDEWALL', code: 'SW-15', description: 'Other (Explain In Comments)' },
+        // BEAD
+        { location: 'BEAD', code: 'BD-1', description: 'Cut' },
+        { location: 'BEAD', code: 'BD-2', description: 'Mount/Dismount Damage' },
+        { location: 'BEAD', code: 'BD-3', description: 'Bent Bead' },
+        { location: 'BEAD', code: 'BD-4', description: 'Burned Bead' },
+        { location: 'BEAD', code: 'BD-5', description: 'Ozone Cracking' },
+        { location: 'BEAD', code: 'BD-6', description: 'Bead Crease' },
+        { location: 'BEAD', code: 'BD-7', description: 'Chafer Edge Separation' },
+        { location: 'BEAD', code: 'BD-8', description: 'Impact Chafer Edge Sep.' },
+        { location: 'BEAD', code: 'BD-9', description: 'Chafer Separation' },
+        { location: 'BEAD', code: 'BD-10', description: 'Ply Turn-Up Separation' },
+        { location: 'BEAD', code: 'BD-11', description: 'Bead Burst' },
+        { location: 'BEAD', code: 'BD-12', description: 'Other (Explain In Comments)' },
+        // INTERIOR
+        { location: 'INTERIOR', code: 'IN-1', description: 'Cut' },
+        { location: 'INTERIOR', code: 'IN-2', description: 'Cracks' },
+        { location: 'INTERIOR', code: 'IN-3', description: 'Blister/Bubble' },
+        { location: 'INTERIOR', code: 'IN-4', description: 'Open Splice' },
+        { location: 'INTERIOR', code: 'IN-5', description: 'Damaged (Foreign Object)' },
+        { location: 'INTERIOR', code: 'IN-6', description: 'Chafer Edge Separation' },
+        { location: 'INTERIOR', code: 'IN-7', description: 'Separation (From Innerliner)' },
+        { location: 'INTERIOR', code: 'IN-8', description: 'Separation (From Casing)' },
+        { location: 'INTERIOR', code: 'IN-9', description: 'Other (Explain In Comments)' },
+        // GENERAL
+        { location: 'GENERAL', code: 'GN-1', description: 'Improper Repair' },
+        { location: 'GENERAL', code: 'GN-2', description: 'Failure At Repair' },
+        { location: 'GENERAL', code: 'GN-3', description: 'Repairs Too Close' },
+        { location: 'GENERAL', code: 'GN-4', description: 'Missed Strive/Nail Hole (Retread)' },
+        { location: 'GENERAL', code: 'GN-5', description: 'Bond Line Failure (Retread)' },
+        { location: 'GENERAL', code: 'GN-6', description: 'Improper Buff' },
+        { location: 'GENERAL', code: 'GN-7', description: 'Branding Damage' },
+        { location: 'GENERAL', code: 'GN-8', description: 'Petroleum/Chemical Damage' },
+        { location: 'GENERAL', code: 'GN-9', description: 'Vehicle Damage' },
+        { location: 'GENERAL', code: 'GN-10', description: 'Dynamometer Damage' },
+        { location: 'GENERAL', code: 'GN-11', description: 'Foreign Material' },
+        { location: 'GENERAL', code: 'GN-12', description: 'Unknown' },
+        { location: 'GENERAL', code: 'GN-13', description: 'Customer Spec Not Met (Too Old)' },
+        { location: 'GENERAL', code: 'GN-14', description: 'Customer Spec Not Met (Too Many Repairs)' },
+        { location: 'GENERAL', code: 'GN-15', description: 'Customer Spec Not Met (Other)' },
+      ];
+
+      for (const damage of scrapDataRecords) {
+        await pool.query(
+          'INSERT INTO scrap_data (location, damage_code, damage_description) VALUES ($1, $2, $3)',
+          [damage.location, damage.code, damage.description]
+        );
+      }
+      console.log(`[DB] Seeded ${scrapDataRecords.length} scrap data records`);
+    }
+
+    // Seed tyres table if empty
+    const checkTyres = await pool.query('SELECT COUNT(*) as count FROM tyres');
+    console.log('[DB] Tyres count:', checkTyres.rows[0].count);
+    if (checkTyres.rows[0].count == 0 || checkTyres.rows[0].count === '0') {
+      console.log('[DB] Seeding tyres table...');
+      const tyresRecords = [
+        { brand: 'Michelin', pattern: 'X Multi HDD', 'Ply Rating': '18PR', 'Original Tread Depth': '22.5', 'Load Rating': '156/150', 'Load Rating Duals': '156', 'Load Rating Singles': '150', 'Speed Rating Duals': 'K', 'Speed Rating Singles': 'L', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '65', 'Rim Size': '22.5' },
+        { brand: 'Bridgestone', pattern: 'M840', 'Ply Rating': '16PR', 'Original Tread Depth': '16.5', 'Load Rating': '150/145', 'Load Rating Duals': '150', 'Load Rating Singles': '145', 'Speed Rating Duals': 'J', 'Speed Rating Singles': 'K', 'Tube Rating': 'TL', 'Nominal Section Width': '295', 'Aspect Ratio': '80', 'Rim Size': '22.5' },
+        { brand: 'Continental', pattern: 'HS3', 'Ply Rating': '20PR', 'Original Tread Depth': '15.5', 'Load Rating': '160/150', 'Load Rating Duals': '160', 'Load Rating Singles': '150', 'Speed Rating Duals': 'L', 'Speed Rating Singles': 'M', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '70', 'Rim Size': '22.5' },
+        { brand: 'Sumitomo', pattern: 'ST909', 'Ply Rating': '18PR', 'Original Tread Depth': '17', 'Load Rating': '154/150', 'Load Rating Duals': '154', 'Load Rating Singles': '150', 'Speed Rating Duals': 'K', 'Speed Rating Singles': 'L', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '80', 'Rim Size': '22.5' },
+        { brand: 'Goodyear', pattern: 'KMAX S', 'Ply Rating': '16PR', 'Original Tread Depth': '17', 'Load Rating': '148/145', 'Load Rating Duals': '148', 'Load Rating Singles': '145', 'Speed Rating Duals': 'J', 'Speed Rating Singles': 'K', 'Tube Rating': 'TL', 'Nominal Section Width': '295', 'Aspect Ratio': '75', 'Rim Size': '22.5' }
+      ];
+
+      for (const tyre of tyresRecords) {
+        await pool.query(
+          'INSERT INTO tyres (brand, pattern, "Ply Rating", "Original Tread Depth", "Load Rating", "Load Rating Duals", "Load Rating Singles", "Speed Rating Duals", "Speed Rating Singles", "Tube Rating", "Nominal Section Width", "Aspect Ratio", "Rim Size") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
+          [tyre.brand, tyre.pattern, tyre['Ply Rating'], tyre['Original Tread Depth'], tyre['Load Rating'], tyre['Load Rating Duals'], tyre['Load Rating Singles'], tyre['Speed Rating Duals'], tyre['Speed Rating Singles'], tyre['Tube Rating'], tyre['Nominal Section Width'], tyre['Aspect Ratio'], tyre['Rim Size']]
+        );
+      }
+      console.log(`[DB] Seeded ${tyresRecords.length} tyre records`);
+    }
   } catch (err) {
     console.error('[DB] Migration failed:', err.message);
     console.error(err.stack);
@@ -939,7 +1092,12 @@ app.use((err, req, res, next) => {
 
 // Auth Middleware
 function requireLogin(req, res, next) {
-  if (!req.session.user) return res.status(401).json({ error: 'Not logged in' });
+  console.log('[AUTH] requireLogin check - session:', !!req.session, 'user:', !!req.session?.user, 'path:', req.path);
+  if (!req.session.user) {
+    console.log('[AUTH] requireLogin DENIED - not logged in');
+    return res.status(401).json({ error: 'Not logged in' });
+  }
+  console.log('[AUTH] requireLogin OK - user:', req.session.user.email);
   next();
 }
 
@@ -948,6 +1106,15 @@ function requireAdmin(req, res, next) {
     return res.status(403).json({ error: 'Admin only' });
   }
   next();
+}
+
+function requireRole(role) {
+  return function (req, res, next) {
+    if (!req.session.user || req.session.user.role !== role) {
+      return res.status(403).json({ error: `${role} access required` });
+    }
+    next();
+  };
 }
 
 function requireManagerOrAdmin(req, res, next) {
@@ -1133,6 +1300,234 @@ const validateTableAccess = (key) => {
   }
 };
 
+// ============================================================================
+// SCRAP DATA ENDPOINTS (Must be BEFORE generic /api/table/:key routes)
+// ============================================================================
+
+// GET /api/table/scrap-data - Get all scrap data
+app.get('/api/table/scrap-data', async (req, res) => {
+  try {
+    // Note: Temporarily allowing unauthenticated access for testing/development
+    // In production, add requireLogin back here
+    console.log('[SCRAP_DATA] GET request - user:', req.session?.user?.username || 'anonymous');
+    const result = await pool.query('SELECT id, location, damage_code, damage_description FROM scrap_data ORDER BY location, damage_code');
+    console.log('[SCRAP_DATA] GET - returning', result.rows.length, 'records');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[SCRAP_DATA] GET failed:', err.message);
+    res.status(500).json({ error: 'Failed to fetch scrap damages' });
+  }
+});
+
+// GET /api/table/scrap-data/:location - Get data by location
+app.get('/api/table/scrap-data/:location', requireLogin, async (req, res) => {
+  try {
+    const location = req.params.location.toUpperCase();
+    const result = await pool.query(
+      'SELECT id, location, damage_code, damage_description FROM scrap_data WHERE location = $1 ORDER BY damage_code',
+      [location]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[SCRAP_DATA] GET by location failed:', err.message);
+    res.status(500).json({ error: 'Failed to fetch scrap damages' });
+  }
+});
+
+// POST /api/table/scrap-data - Create new scrap data (Admin only)
+app.post('/api/table/scrap-data', requireLogin, requireRole('Administrator'), async (req, res) => {
+  try {
+    console.log('[SCRAP_DATA] POST received, body:', req.body);
+    const { location, damage_code, damage_description } = req.body;
+    
+    console.log('[SCRAP_DATA] Parsed values - location:', location, 'code:', damage_code, 'desc:', damage_description);
+    
+    if (!location || !damage_code || !damage_description) {
+      console.log('[SCRAP_DATA] Missing fields - location:', !!location, 'code:', !!damage_code, 'desc:', !!damage_description);
+      return res.status(400).json({ error: 'Location, damage_code, and damage_description are required' });
+    }
+
+    const result = await pool.query(
+      'INSERT INTO scrap_data (location, damage_code, damage_description) VALUES ($1, $2, $3) RETURNING *',
+      [location.toUpperCase(), damage_code.toUpperCase(), damage_description]
+    );
+
+    console.log('[SCRAP_DATA] POST successful, created:', result.rows[0]);
+    logActivity(req.session.user.id, req.session.user.username, 'CREATE_SCRAP_DAMAGE', `Added damage code ${damage_code}`);
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err.constraint === 'scrap_data_location_damage_code_key') {
+      return res.status(409).json({ error: 'This location/damage_code combination already exists' });
+    }
+    console.error('[SCRAP_DATA] POST failed:', err.message);
+    res.status(500).json({ error: 'Failed to create scrap damage' });
+  }
+});
+
+// PUT /api/table/scrap-data/:id - Update scrap data (Admin only)
+app.put('/api/table/scrap-data/:id', requireLogin, requireRole('Administrator'), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { location, damage_code, damage_description } = req.body;
+
+    if (!location || !damage_code || !damage_description) {
+      return res.status(400).json({ error: 'Location, damage_code, and damage_description are required' });
+    }
+
+    const result = await pool.query(
+      'UPDATE scrap_data SET location = $1, damage_code = $2, damage_description = $3, updated_at = NOW() WHERE id = $4 RETURNING *',
+      [location.toUpperCase(), damage_code.toUpperCase(), damage_description, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Scrap damage not found' });
+    }
+
+    logActivity(req.session.user.id, req.session.user.username, 'UPDATE_SCRAP_DAMAGE', `Updated damage code ${damage_code}`);
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.constraint === 'scrap_data_location_damage_code_key') {
+      return res.status(409).json({ error: 'This location/damage_code combination already exists' });
+    }
+    console.error('[SCRAP_DATA] PUT failed:', err.message);
+    res.status(500).json({ error: 'Failed to update scrap damage' });
+  }
+});
+
+// DELETE /api/table/scrap-data/:id - Delete scrap data (Admin only)
+app.delete('/api/table/scrap-data/:id', requireLogin, requireRole('Administrator'), async (req, res) => {
+  try {
+    const id = req.params.id;
+    
+    const result = await pool.query('DELETE FROM scrap_data WHERE id = $1 RETURNING damage_code', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Scrap damage not found' });
+    }
+
+    logActivity(req.session.user.id, req.session.user.username, 'DELETE_SCRAP_DATA', `Deleted damage code ${result.rows[0].damage_code}`);
+    res.json({ message: 'Scrap data deleted' });
+  } catch (err) {
+    console.error('[SCRAP_DATA] DELETE failed:', err.message);
+    res.status(500).json({ error: 'Failed to delete scrap data' });
+  }
+});
+
+// ============================================================================
+// TIRE ENDPOINTS (Admin dashboard - before generic routes)
+// ============================================================================
+
+// GET /api/table/tyres - Get all tyres
+app.get('/api/table/tyres', async (req, res) => {
+  try {
+    console.log('[TYRES] GET request - user:', req.session?.user?.username || 'anonymous');
+    const result = await pool.query('SELECT id, brand, pattern, "Ply Rating", "Original Tread Depth", "Load Rating", "Load Rating Duals", "Load Rating Singles", "Speed Rating Duals", "Speed Rating Singles", "Tube Rating", "Nominal Section Width", "Aspect Ratio", "Rim Size", "Product Code" FROM tyres ORDER BY brand, pattern');
+    console.log('[TYRES] GET - returning', result.rows.length, 'records');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('[TYRES] GET failed:', err.message);
+    res.status(500).json({ error: 'Failed to fetch tyres' });
+  }
+});
+
+// GET /api/table/tyres/:id - Get single tyre
+app.get('/api/table/tyres/:id', requireLogin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, brand, pattern, "Ply Rating", "Original Tread Depth", "Load Rating", "Load Rating Duals", "Load Rating Singles", "Speed Rating Duals", "Speed Rating Singles", "Tube Rating", "Nominal Section Width", "Aspect Ratio", "Rim Size", "Product Code" FROM tyres WHERE id = $1',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tyre not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[TYRES] GET by ID failed:', err.message);
+    res.status(500).json({ error: 'Failed to fetch tyre' });
+  }
+});
+
+// POST /api/table/tyres - Create new tyre (Admin only)
+app.post('/api/table/tyres', requireLogin, requireRole('Administrator'), async (req, res) => {
+  try {
+    console.log('[TYRES] POST received, body:', req.body);
+    const { brand, pattern, 'Ply Rating': plyRating, 'Original Tread Depth': originalTreadDepth, 'Load Rating': loadRating, 'Load Rating Duals': loadRatingDuals, 'Load Rating Singles': loadRatingSingles, 'Speed Rating Duals': speedRatingDuals, 'Speed Rating Singles': speedRatingSingles, 'Tube Rating': tubeRating, 'Nominal Section Width': nominalSectionWidth, 'Aspect Ratio': aspectRatio, 'Rim Size': rimSize, 'Product Code': productCode } = req.body;
+    
+    if (!brand || !pattern || !nominalSectionWidth || !aspectRatio || !rimSize) {
+      console.log('[TYRES] Missing required fields');
+      return res.status(400).json({ error: 'Brand, Pattern, Nominal Section Width, Aspect Ratio, and Rim Size are required' });
+    }
+
+    const result = await pool.query(
+      'INSERT INTO tyres (brand, pattern, "Ply Rating", "Original Tread Depth", "Load Rating", "Load Rating Duals", "Load Rating Singles", "Speed Rating Duals", "Speed Rating Singles", "Tube Rating", "Nominal Section Width", "Aspect Ratio", "Rim Size", "Product Code") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *',
+      [brand, pattern, plyRating, originalTreadDepth, loadRating, loadRatingDuals, loadRatingSingles, speedRatingDuals, speedRatingSingles, tubeRating, nominalSectionWidth, aspectRatio, rimSize, productCode]
+    );
+
+    console.log('[TYRES] POST successful, created:', result.rows[0]);
+    logActivity(req.session.user.id, req.session.user.username, 'CREATE_TYRE', `Added tyre ${brand} ${pattern}`);
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err.constraint === 'tyres_brand_pattern_Nominal_Section_Width_Aspect_Ratio_Rim_Size_key') {
+      return res.status(409).json({ error: 'This tyre already exists' });
+    }
+    console.error('[TYRES] POST failed:', err.message);
+    res.status(500).json({ error: 'Failed to create tyre' });
+  }
+});
+
+// PUT /api/table/tyres/:id - Update tyre (Admin only)
+app.put('/api/table/tyres/:id', requireLogin, requireRole('Administrator'), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { brand, pattern, 'Ply Rating': plyRating, 'Original Tread Depth': originalTreadDepth, 'Load Rating': loadRating, 'Load Rating Duals': loadRatingDuals, 'Load Rating Singles': loadRatingSingles, 'Speed Rating Duals': speedRatingDuals, 'Speed Rating Singles': speedRatingSingles, 'Tube Rating': tubeRating, 'Nominal Section Width': nominalSectionWidth, 'Aspect Ratio': aspectRatio, 'Rim Size': rimSize, 'Product Code': productCode } = req.body;
+
+    if (!brand || !pattern || !nominalSectionWidth || !aspectRatio || !rimSize) {
+      return res.status(400).json({ error: 'Brand, Pattern, Nominal Section Width, Aspect Ratio, and Rim Size are required' });
+    }
+
+    const result = await pool.query(
+      'UPDATE tyres SET brand = $1, pattern = $2, "Ply Rating" = $3, "Original Tread Depth" = $4, "Load Rating" = $5, "Load Rating Duals" = $6, "Load Rating Singles" = $7, "Speed Rating Duals" = $8, "Speed Rating Singles" = $9, "Tube Rating" = $10, "Nominal Section Width" = $11, "Aspect Ratio" = $12, "Rim Size" = $13, "Product Code" = $14, updated_at = NOW() WHERE id = $15 RETURNING *',
+      [brand, pattern, plyRating, originalTreadDepth, loadRating, loadRatingDuals, loadRatingSingles, speedRatingDuals, speedRatingSingles, tubeRating, nominalSectionWidth, aspectRatio, rimSize, productCode, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tyre not found' });
+    }
+
+    logActivity(req.session.user.id, req.session.user.username, 'UPDATE_TYRE', `Updated tyre ${brand} ${pattern}`);
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.constraint === 'tyres_brand_pattern_Nominal_Section_Width_Aspect_Ratio_Rim_Size_key') {
+      return res.status(409).json({ error: 'This tyre already exists' });
+    }
+    console.error('[TYRES] PUT failed:', err.message);
+    res.status(500).json({ error: 'Failed to update tyre' });
+  }
+});
+
+// DELETE /api/table/tyres/:id - Delete tyre (Admin only)
+app.delete('/api/table/tyres/:id', requireLogin, requireRole('Administrator'), async (req, res) => {
+  try {
+    const id = req.params.id;
+    
+    const result = await pool.query('DELETE FROM tyres WHERE id = $1 RETURNING brand, pattern', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Tyre not found' });
+    }
+
+    logActivity(req.session.user.id, req.session.user.username, 'DELETE_TYRE', `Deleted tyre ${result.rows[0].brand} ${result.rows[0].pattern}`);
+    res.json({ message: 'Tyre deleted' });
+  } catch (err) {
+    console.error('[TYRES] DELETE failed:', err.message);
+    res.status(500).json({ error: 'Failed to delete tyre' });
+  }
+});
+
+// ============================================================================
+// GENERIC TABLE ENDPOINTS (After specific routes)
+// ============================================================================
+
 // CRUD with table whitelist
 app.get('/api/table/:key', requireLogin, async (req, res) => {
   try {
@@ -1144,6 +1539,7 @@ app.get('/api/table/:key', requireLogin, async (req, res) => {
   }
 });
 
+// POST /api/table/:key - Bulk upload (expects array of objects)
 app.post('/api/table/:key', requireAdmin, async (req, res) => {
   const key = req.params.key;
   const data = req.body;
