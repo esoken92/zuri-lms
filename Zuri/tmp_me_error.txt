@@ -1,0 +1,19 @@
+﻿Invoke-RestMethod : 
+
+
+
+Error
+
+
+Cannot GET /me
+
+
+
+At line:2 char:3
++   Invoke-RestMethod -Uri 'http://localhost:5000/me' -Method GET -WebS ...
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invoke-RestMe 
+   thod], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeRestMetho 
+   dCommand
+

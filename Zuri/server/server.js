@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
-const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -11,6 +10,12 @@ const { Parser } = require('json2csv');
 const crypto = require('crypto');
 const resetPasswordRoute = require('./routes/resetPassword');
 const resetConfirmRoute = require('./routes/resetConfirm');
+
+// Import database configuration and utilities
+const { db, pool } = require('./src/config/database');
+const { initializeTables } = require('./src/utils/databaseInit');
+const { isDeveloperMode, requireDeveloperMode } = require('./src/config/developerMode');
+const { seedGeographicData } = require('./src/utils/geographicSeeder');
 
 const allowedOrigins = ['http://localhost:3000', 'http://localhost:5000'];
 
@@ -21,425 +26,1524 @@ const PORT = 5000;
 // (Replaced by enhanced session-based logger above)
 
 
-// PostgreSQL setup (read from env with sensible defaults)
-const dbConfig = {
-  user: process.env.PGUSER || process.env.PGUSER || 'postgres',
-  host: process.env.PGHOST || 'localhost',
-  database: process.env.PGDATABASE || 'zuri',
-  password: process.env.PGPASSWORD || '1234',
-  port: Number(process.env.PGPORT) || 54321,
+// Database abstraction for both SQLite and PostgreSQL
+const isProduction = process.env.NODE_ENV === 'production';
+const query = async (sql, params = []) => {
+  if (isProduction) {
+    // Convert ? placeholders to $1, $2, etc. for PostgreSQL
+    let pgSql = sql;
+    params.forEach((_, i) => {
+      pgSql = pgSql.replace(/\?/, `$${i + 1}`);
+    });
+    return pool.query(pgSql, params);
+  } else {
+    return new Promise((resolve, reject) => {
+      if (sql.trim().toUpperCase().startsWith('SELECT')) {
+        db.all(sql, params, (err, rows) => {
+          if (err) reject(err);
+          else resolve({ rows });
+        });
+      } else {
+        db.run(sql, params, function(err) {
+          if (err) reject(err);
+          else resolve({ rows: [{ id: this.lastID }] });
+        });
+      }
+    });
+  }
 };
-const pool = new Pool(dbConfig);
 
-// Log DB config (without password) and check connectivity on startup
-console.log(`[DB] Using Postgres config: user=${dbConfig.user} host=${dbConfig.host} port=${dbConfig.port} database=${dbConfig.database}`);
+// Log DB config and check connectivity on startup
+console.log(`[DB] Using ${process.env.NODE_ENV === 'production' ? 'PostgreSQL' : 'SQLite'} database`);
 async function checkDb() {
   try {
-    const res = await pool.query('SELECT NOW()');
-    console.log('[DB] Connected to Postgres, now=', res.rows[0].now);
+    if (process.env.NODE_ENV === 'production') {
+      const res = await pool.query('SELECT NOW()');
+      console.log('[DB] Connected to Postgres, now=', res.rows[0].now);
+    } else {
+      // SQLite connection check - db is already connected from config
+      console.log('[DB] Connected to SQLite database');
+    }
     // Run migrations to ensure required tables exist
     await runMigrations();
   } catch (err) {
-    console.error('[DB] Failed to connect to Postgres:', err.message);
+    console.error('[DB] Failed to connect to database:', err.message);
     console.error(err.stack);
     process.exit(1);
   }
 }
 checkDb();
 
+// SQLite-specific geographic seeding function
+async function seedGeographicDataSQLite(db) {
+  try {
+    console.log('[DB] Seeding geographic data for SQLite...');
+
+    // Check if countries table is empty
+    const countriesCount = await new Promise((resolve, reject) => {
+      db.get('SELECT COUNT(*) as count FROM countries', (err, row) => {
+        if (err) reject(err);
+        else resolve(row.count);
+      });
+    });
+
+    if (countriesCount == 0) {
+      console.log('[DB] Seeding countries...');
+      const countries = [
+        { name: 'South Africa', code: 'ZA', is_sadc: 1 },
+        { name: 'Botswana', code: 'BW', is_sadc: 1 },
+        { name: 'Namibia', code: 'NA', is_sadc: 1 },
+        { name: 'Zimbabwe', code: 'ZW', is_sadc: 1 },
+        { name: 'Mozambique', code: 'MZ', is_sadc: 1 },
+        { name: 'Angola', code: 'AO', is_sadc: 1 },
+        { name: 'Malawi', code: 'MW', is_sadc: 1 },
+        { name: 'Zambia', code: 'ZM', is_sadc: 1 },
+        { name: 'Tanzania', code: 'TZ', is_sadc: 1 },
+        { name: 'Lesotho', code: 'LS', is_sadc: 1 },
+        { name: 'Swaziland', code: 'SZ', is_sadc: 1 },
+        { name: 'Democratic Republic of Congo', code: 'CD', is_sadc: 1 },
+        { name: 'Madagascar', code: 'MG', is_sadc: 1 },
+        { name: 'Mauritius', code: 'MU', is_sadc: 1 },
+        { name: 'Seychelles', code: 'SC', is_sadc: 1 },
+        { name: 'Comoros', code: 'KM', is_sadc: 1 },
+        { name: 'Kenya', code: 'KE', is_sadc: 0 },
+        { name: 'Uganda', code: 'UG', is_sadc: 0 },
+        { name: 'Rwanda', code: 'RW', is_sadc: 0 },
+        { name: 'Burundi', code: 'BI', is_sadc: 0 },
+        { name: 'Ethiopia', code: 'ET', is_sadc: 0 },
+        { name: 'Somalia', code: 'SO', is_sadc: 0 },
+        { name: 'Djibouti', code: 'DJ', is_sadc: 0 },
+        { name: 'Eritrea', code: 'ER', is_sadc: 0 },
+        { name: 'Sudan', code: 'SD', is_sadc: 0 },
+        { name: 'South Sudan', code: 'SS', is_sadc: 0 },
+        { name: 'Egypt', code: 'EG', is_sadc: 0 },
+        { name: 'Libya', code: 'LY', is_sadc: 0 },
+        { name: 'Tunisia', code: 'TN', is_sadc: 0 },
+        { name: 'Algeria', code: 'DZ', is_sadc: 0 },
+        { name: 'Morocco', code: 'MA', is_sadc: 0 },
+        { name: 'Western Sahara', code: 'EH', is_sadc: 0 },
+        { name: 'Mauritania', code: 'MR', is_sadc: 0 },
+        { name: 'Mali', code: 'ML', is_sadc: 0 },
+        { name: 'Niger', code: 'NE', is_sadc: 0 },
+        { name: 'Chad', code: 'TD', is_sadc: 0 },
+        { name: 'Central African Republic', code: 'CF', is_sadc: 0 },
+        { name: 'Cameroon', code: 'CM', is_sadc: 0 },
+        { name: 'Equatorial Guinea', code: 'GQ', is_sadc: 0 },
+        { name: 'Gabon', code: 'GA', is_sadc: 0 },
+        { name: 'Republic of Congo', code: 'CG', is_sadc: 0 },
+        { name: 'Nigeria', code: 'NG', is_sadc: 0 },
+        { name: 'Benin', code: 'BJ', is_sadc: 0 },
+        { name: 'Togo', code: 'TG', is_sadc: 0 },
+        { name: 'Ghana', code: 'GH', is_sadc: 0 },
+        { name: 'Cote d\'Ivoire', code: 'CI', is_sadc: 0 },
+        { name: 'Liberia', code: 'LR', is_sadc: 0 },
+        { name: 'Sierra Leone', code: 'SL', is_sadc: 0 },
+        { name: 'Guinea', code: 'GN', is_sadc: 0 },
+        { name: 'Guinea-Bissau', code: 'GW', is_sadc: 0 },
+        { name: 'Gambia', code: 'GM', is_sadc: 0 },
+        { name: 'Senegal', code: 'SN', is_sadc: 0 },
+        { name: 'Cape Verde', code: 'CV', is_sadc: 0 },
+        { name: 'Burkina Faso', code: 'BF', is_sadc: 0 },
+        { name: 'Sao Tome and Principe', code: 'ST', is_sadc: 0 }
+      ];
+
+      for (const country of countries) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            'INSERT OR IGNORE INTO countries (name, code, is_sadc) VALUES (?, ?, ?)',
+            [country.name, country.code, country.is_sadc],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+      }
+      console.log(`[DB] Seeded ${countries.length} countries`);
+    }
+
+    // Seed South African provinces
+    const provincesCount = await new Promise((resolve, reject) => {
+      db.get('SELECT COUNT(*) as count FROM provinces', (err, row) => {
+        if (err) reject(err);
+        else resolve(row.count);
+      });
+    });
+
+    if (provincesCount == 0) {
+      console.log('[DB] Seeding provinces...');
+      const provinces = [
+        { name: 'Eastern Cape', code: 'EC', country_code: 'ZA' },
+        { name: 'Free State', code: 'FS', country_code: 'ZA' },
+        { name: 'Gauteng', code: 'GP', country_code: 'ZA' },
+        { name: 'KwaZulu-Natal', code: 'KZN', country_code: 'ZA' },
+        { name: 'Limpopo', code: 'LP', country_code: 'ZA' },
+        { name: 'Mpumalanga', code: 'MP', country_code: 'ZA' },
+        { name: 'Northern Cape', code: 'NC', country_code: 'ZA' },
+        { name: 'North West', code: 'NW', country_code: 'ZA' },
+        { name: 'Western Cape', code: 'WC', country_code: 'ZA' }
+      ];
+
+      for (const province of provinces) {
+        // Get country_id first
+        const countryId = await new Promise((resolve, reject) => {
+          db.get('SELECT id FROM countries WHERE code = ?', [province.country_code], (err, row) => {
+            if (err) reject(err);
+            else resolve(row ? row.id : null);
+          });
+        });
+
+        if (countryId) {
+          await new Promise((resolve, reject) => {
+            db.run(
+              'INSERT OR IGNORE INTO provinces (name, code, country_id) VALUES (?, ?, ?)',
+              [province.name, province.code, countryId],
+              (err) => {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
+        }
+      }
+      console.log(`[DB] Seeded ${provinces.length} provinces`);
+    }
+
+    console.log('[DB] Geographic data seeding completed');
+  } catch (err) {
+    console.error('[DB] Geographic seeding failed:', err.message);
+    throw err;
+  }
+}
+
 // Simple migration runner: ensure tables exist with appropriate schema
 async function runMigrations() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  let db;
+  if (!isProduction) {
+    // SQLite for development
+    const { db: sqliteDb } = require('./src/config/database');
+    db = sqliteDb;
+  } else {
+    // PostgreSQL for production
+    db = pool;
+  }
+
   try {
     console.log('[DB] Running migrations...');
     
-    const createScrapsSql = `
-      CREATE TABLE IF NOT EXISTS "scraps" (
-        id SERIAL PRIMARY KEY,
-        customer_name TEXT,
-        customer_phone TEXT,
-        customer_email TEXT,
-        location TEXT,
-        report_date TEXT,
-        status TEXT,
-        items JSONB,
-        user_id INTEGER,
-        user_name TEXT,
-        store_id INTEGER,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(createScrapsSql);
+    if (!isProduction) {
+      // SQLite implementation
+      const sqliteMigrations = [
+        `CREATE TABLE IF NOT EXISTS scraps (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_name TEXT,
+          customer_phone TEXT,
+          customer_email TEXT,
+          location TEXT,
+          report_date TEXT,
+          status TEXT,
+          items TEXT,
+          user_id INTEGER,
+          user_name TEXT,
+          store_id INTEGER,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    const createCompaniesSql = `
-      CREATE TABLE IF NOT EXISTS "companies" (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        contact_name TEXT,
-        email TEXT,
-        phone TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(createCompaniesSql);
+        `CREATE TABLE IF NOT EXISTS companies (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          contact_name TEXT,
+          email TEXT,
+          phone TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    const createDepotsSql = `
-      CREATE TABLE IF NOT EXISTS "depots" (
-        id SERIAL PRIMARY KEY,
-        location TEXT NOT NULL,
-        contact_name TEXT,
-        email TEXT,
-        phone TEXT,
-        company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(createDepotsSql);
+        `CREATE TABLE IF NOT EXISTS depots (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          location TEXT NOT NULL,
+          contact_name TEXT,
+          email TEXT,
+          phone TEXT,
+          company_id INTEGER REFERENCES companies(id),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    const createTyresSql = `
-      CREATE TABLE IF NOT EXISTS "tyres" (
-        id SERIAL PRIMARY KEY,
-        brand VARCHAR(100) NOT NULL,
-        pattern VARCHAR(100) NOT NULL,
-        "Ply Rating" VARCHAR(50),
-        "Original Tread Depth" VARCHAR(50),
-        "Load Rating" VARCHAR(50),
-        "Load Rating Duals" VARCHAR(50),
-        "Load Rating Singles" VARCHAR(50),
-        "Speed Rating Duals" VARCHAR(10),
-        "Speed Rating Singles" VARCHAR(10),
-        "Tube Rating" VARCHAR(10),
-        "Nominal Section Width" VARCHAR(50),
-        "Aspect Ratio" VARCHAR(50),
-        "Rim Size" VARCHAR(50),
-        "Product Code" VARCHAR(50),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(brand, pattern, "Nominal Section Width", "Aspect Ratio", "Rim Size")
-      );
-    `;
-    await pool.query(createTyresSql);
+        `CREATE TABLE IF NOT EXISTS tyres (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          brand VARCHAR(100) NOT NULL,
+          pattern VARCHAR(100) NOT NULL,
+          "Ply Rating" VARCHAR(50),
+          "Original Tread Depth" VARCHAR(50),
+          "Load Rating" VARCHAR(50),
+          "Load Rating Duals" VARCHAR(50),
+          "Load Rating Singles" VARCHAR(50),
+          "Speed Rating Duals" VARCHAR(10),
+          "Speed Rating Singles" VARCHAR(10),
+          "Tube Rating" VARCHAR(10),
+          "Nominal Section Width" VARCHAR(50),
+          "Aspect Ratio" VARCHAR(50),
+          "Rim Size" VARCHAR(50),
+          "Product Code" VARCHAR(50),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(brand, pattern, "Nominal Section Width", "Aspect Ratio", "Rim Size")
+        )`,
 
-    const createVehicleConfigsSql = `
-      CREATE TABLE IF NOT EXISTS "vehicle_configs" (
-        id SERIAL PRIMARY KEY,
-        item_code TEXT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        tire_config TEXT,
-        tire_sizes JSONB,
-        ideal_pressures JSONB,
-        pressure_units JSONB,
-        spares INTEGER DEFAULT 0,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(createVehicleConfigsSql);
+        `CREATE TABLE IF NOT EXISTS vehicle_configs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          item_code TEXT UNIQUE NOT NULL,
+          name TEXT NOT NULL,
+          tire_config TEXT,
+          tire_sizes TEXT,
+          ideal_pressures TEXT,
+          pressure_units TEXT,
+          spares INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    // User activity logging table
-    const createActivityLogSql = `
-      CREATE TABLE IF NOT EXISTS "user_activity_log" (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER,
-        username TEXT,
-        activity_type TEXT NOT NULL,
-        activity_description TEXT,
-        table_name TEXT,
-        record_id INTEGER,
-        ip_address TEXT,
-        user_agent TEXT,
-        browser TEXT,
-        device TEXT,
-        os TEXT,
-        language TEXT,
-        screen_resolution TEXT,
-        timezone TEXT,
-        success BOOLEAN DEFAULT true,
-        error_code TEXT,
-        error_message TEXT,
-        request_data JSONB,
-        response_data JSONB,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(createActivityLogSql);
+        // User activity logging table
+        `CREATE TABLE IF NOT EXISTS user_activity_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          username TEXT,
+          activity_type TEXT NOT NULL,
+          activity_description TEXT,
+          table_name TEXT,
+          record_id INTEGER,
+          ip_address TEXT,
+          user_agent TEXT,
+          browser TEXT,
+          device TEXT,
+          os TEXT,
+          language TEXT,
+          screen_resolution TEXT,
+          timezone TEXT,
+          success INTEGER DEFAULT 1,
+          error_code TEXT,
+          error_message TEXT,
+          request_data TEXT,
+          response_data TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    // Create index for faster queries
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_activity_user_id ON user_activity_log(user_id);
-      CREATE INDEX IF NOT EXISTS idx_activity_created_at ON user_activity_log(created_at);
-      CREATE INDEX IF NOT EXISTS idx_activity_type ON user_activity_log(activity_type);
-    `);
+        // Create index for faster queries
+        `CREATE INDEX IF NOT EXISTS idx_activity_user_id ON user_activity_log(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_activity_created_at ON user_activity_log(created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_activity_type ON user_activity_log(activity_type)`,
 
-    // User sessions tracking table
-    const createUserSessionsSql = `
-      CREATE TABLE IF NOT EXISTS "user_sessions" (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER,
-        username TEXT,
-        session_id TEXT,
-        ip_address TEXT,
-        user_agent TEXT,
-        browser TEXT,
-        browser_version TEXT,
-        device TEXT,
-        device_type TEXT,
-        os TEXT,
-        os_version TEXT,
-        language TEXT,
-        languages JSONB,
-        screen_resolution TEXT,
-        viewport_size TEXT,
-        timezone TEXT,
-        platform TEXT,
-        cookie_enabled BOOLEAN,
-        do_not_track BOOLEAN,
-        login_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        logout_time TIMESTAMP WITH TIME ZONE,
-        session_duration INTEGER,
-        is_active BOOLEAN DEFAULT true
-      );
-    `;
-    await pool.query(createUserSessionsSql);
+        // User sessions tracking table
+        `CREATE TABLE IF NOT EXISTS user_sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          username TEXT,
+          session_id TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          browser TEXT,
+          browser_version TEXT,
+          device TEXT,
+          device_type TEXT,
+          os TEXT,
+          os_version TEXT,
+          language TEXT,
+          languages TEXT,
+          screen_resolution TEXT,
+          viewport_size TEXT,
+          timezone TEXT,
+          platform TEXT,
+          cookie_enabled INTEGER,
+          do_not_track INTEGER,
+          login_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+          last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+          logout_time DATETIME,
+          session_duration INTEGER,
+          is_active INTEGER DEFAULT 1
+        )`,
 
-    // Create indexes for sessions
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id);
-      CREATE INDEX IF NOT EXISTS idx_sessions_is_active ON user_sessions(is_active);
-      CREATE INDEX IF NOT EXISTS idx_sessions_login_time ON user_sessions(login_time);
-    `);
+        // Create indexes for sessions
+        `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_sessions_is_active ON user_sessions(is_active)`,
+        `CREATE INDEX IF NOT EXISTS idx_sessions_login_time ON user_sessions(login_time)`,
 
-    // User drafts table (auto-saved form data for offline persistence)
-    const createUserDraftsSql = `
-      CREATE TABLE IF NOT EXISTS "user_drafts" (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        form_type TEXT NOT NULL,
-        form_name TEXT NOT NULL,
-        draft_data JSONB,
-        sync_status TEXT DEFAULT 'pending',
-        last_saved TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(createUserDraftsSql);
+        // User drafts table (auto-saved form data for offline persistence)
+        `CREATE TABLE IF NOT EXISTS user_drafts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          form_type TEXT NOT NULL,
+          form_name TEXT NOT NULL,
+          draft_data TEXT,
+          sync_status TEXT DEFAULT 'pending',
+          last_saved DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    // Create indexes for drafts
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_drafts_user_id ON user_drafts(user_id);
-      CREATE INDEX IF NOT EXISTS idx_drafts_form_type ON user_drafts(form_type);
-      CREATE INDEX IF NOT EXISTS idx_drafts_last_saved ON user_drafts(last_saved);
-    `);
+        // Create indexes for drafts
+        `CREATE INDEX IF NOT EXISTS idx_drafts_user_id ON user_drafts(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_drafts_form_type ON user_drafts(form_type)`,
+        `CREATE INDEX IF NOT EXISTS idx_drafts_last_saved ON user_drafts(last_saved)`,
 
-    // Add columns to tyres table for triple depth readings if they don't exist
-    try {
-      await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthInner" NUMERIC(5,2);`);
-      await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthMiddle" NUMERIC(5,2);`);
-      await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthOuter" NUMERIC(5,2);`);
-      await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "comments" TEXT;`);
-    } catch (alterErr) {
-      // Column might already exist, which is fine
-      console.log('[DB] Tire columns update (expected if already exist):', alterErr.message);
-    }
+        // Add columns to tyres table for triple depth readings if they don't exist
+        `ALTER TABLE tyres ADD COLUMN depthInner REAL`,
+        `ALTER TABLE tyres ADD COLUMN depthMiddle REAL`,
+        `ALTER TABLE tyres ADD COLUMN depthOuter REAL`,
+        `ALTER TABLE tyres ADD COLUMN comments TEXT`,
 
-    // Create inspections_drafts table for auto-save functionality
-    const createInspectionsDraftsSql = `
-      CREATE TABLE IF NOT EXISTS "inspections_drafts" (
-        id SERIAL PRIMARY KEY,
-        draft_id TEXT UNIQUE NOT NULL,
-        user_id INTEGER NOT NULL,
-        header JSONB NOT NULL,
-        vehicles JSONB NOT NULL,
-        last_saved TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(createInspectionsDraftsSql);
+        // Create inspections_drafts table for auto-save functionality
+        `CREATE TABLE IF NOT EXISTS inspections_drafts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          draft_id TEXT UNIQUE NOT NULL,
+          user_id INTEGER NOT NULL,
+          header TEXT NOT NULL,
+          vehicles TEXT NOT NULL,
+          last_saved DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    // Create indexes for drafts
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_inspections_drafts_draft_id ON inspections_drafts(draft_id);
-      CREATE INDEX IF NOT EXISTS idx_inspections_drafts_user_id ON inspections_drafts(user_id);
-      CREATE INDEX IF NOT EXISTS idx_inspections_drafts_last_saved ON inspections_drafts(last_saved);
-    `);
+        // Create indexes for drafts
+        `CREATE INDEX IF NOT EXISTS idx_inspections_drafts_draft_id ON inspections_drafts(draft_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_inspections_drafts_user_id ON inspections_drafts(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_inspections_drafts_last_saved ON inspections_drafts(last_saved)`,
 
-    // Create vehicle_configurations table if it doesn't exist
-    const createVehicleConfigurationsSql = `
-      CREATE TABLE IF NOT EXISTS "vehicle_configurations" (
-        id SERIAL PRIMARY KEY,
-        code TEXT UNIQUE NOT NULL,
-        positionName TEXT NOT NULL,
-        tireCount INTEGER DEFAULT 4,
-        status TEXT DEFAULT 'approved',
-        suggestedBy TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(createVehicleConfigurationsSql);
+        // Create vehicle_configurations table if it doesn't exist
+        `CREATE TABLE IF NOT EXISTS vehicle_configurations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT UNIQUE NOT NULL,
+          positionName TEXT NOT NULL,
+          tireCount INTEGER DEFAULT 4,
+          status TEXT DEFAULT 'approved',
+          suggestedBy TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    // Create configuration_suggestions table for user suggestions
-    const createConfigSuggestionsSql = `
-      CREATE TABLE IF NOT EXISTS "configuration_suggestions" (
-        id SERIAL PRIMARY KEY,
-        code TEXT NOT NULL,
-        positionName TEXT NOT NULL,
-        tireCount INTEGER DEFAULT 4,
-        suggestedBy TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        admin_notes TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        approved_at TIMESTAMP WITH TIME ZONE
-      );
-    `;
-    await pool.query(createConfigSuggestionsSql);
+        // Create configuration_suggestions table for user suggestions
+        `CREATE TABLE IF NOT EXISTS configuration_suggestions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT NOT NULL,
+          positionName TEXT NOT NULL,
+          tireCount INTEGER DEFAULT 4,
+          suggestedBy TEXT NOT NULL,
+          status TEXT DEFAULT 'pending',
+          admin_notes TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          approved_at DATETIME
+        )`,
 
-    // Create indexes
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_vehicle_configs_code ON vehicle_configurations(code);
-      CREATE INDEX IF NOT EXISTS idx_config_suggestions_status ON configuration_suggestions(status);
-    `);
+        // Create indexes
+        `CREATE INDEX IF NOT EXISTS idx_vehicle_configs_code ON vehicle_configurations(code)`,
+        `CREATE INDEX IF NOT EXISTS idx_config_suggestions_status ON configuration_suggestions(status)`,
 
-    // Create scrap_data table
-    const createScrapDataSql = `
-      CREATE TABLE IF NOT EXISTS "scrap_data" (
-        id SERIAL PRIMARY KEY,
-        location VARCHAR(100) NOT NULL,
-        damage_code VARCHAR(50) NOT NULL,
-        damage_description TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(location, damage_code)
-      )
-    `;
-    await pool.query(createScrapDataSql);
+        // Create scrap_data table
+        `CREATE TABLE IF NOT EXISTS scrap_data (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          location VARCHAR(100) NOT NULL,
+          damage_code VARCHAR(50) NOT NULL,
+          damage_description TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(location, damage_code)
+        )`,
 
-    // Create index on scrap_data
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_scrap_data_location ON scrap_data(location)');
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_scrap_data_code ON scrap_data(damage_code)');
+        // Create index on scrap_data
+        `CREATE INDEX IF NOT EXISTS idx_scrap_data_location ON scrap_data(location)`,
+        `CREATE INDEX IF NOT EXISTS idx_scrap_data_code ON scrap_data(damage_code)`,
 
-    // Seed scrap_data table if empty
-    const checkScrapData = await pool.query('SELECT COUNT(*) as count FROM scrap_data');
-    console.log('[DB] Scrap data count:', checkScrapData.rows[0].count);
-    if (checkScrapData.rows[0].count == 0 || checkScrapData.rows[0].count === '0') {
-      console.log('[DB] Seeding scrap_data table...');
-      const scrapDataRecords = [
-        // TREAD
-        { location: 'TREAD', code: 'TR-1', description: 'Puncture/Cut (To Interior)' },
-        { location: 'TREAD', code: 'TR-2', description: 'Puncture/Cut (Not To Interior)' },
-        { location: 'TREAD', code: 'TR-3', description: 'Chipping/Chunking' },
-        { location: 'TREAD', code: 'TR-4', description: 'Cut Separation' },
-        { location: 'TREAD', code: 'TR-5', description: 'Impact Break' },
-        { location: 'TREAD', code: 'TR-6', description: 'Stone Retention Damage' },
-        { location: 'TREAD', code: 'TR-7', description: 'Brake Lock/Chipping' },
-        { location: 'TREAD', code: 'TR-8', description: 'Irregular Wear' },
-        { location: 'TREAD', code: 'TR-9', description: 'Worn Too Far' },
-        { location: 'TREAD', code: 'TR-10', description: 'Defense Groove Tearing' },
-        { location: 'TREAD', code: 'TR-11', description: 'Rib/Lug Tearing' },
-        { location: 'TREAD', code: 'TR-12', description: 'Groove Cracking' },
-        { location: 'TREAD', code: 'TR-13', description: 'Open Splice' },
-        { location: 'TREAD', code: 'TR-14', description: 'Tread Leaving Belt' },
-        { location: 'TREAD', code: 'TR-15', description: 'Belt Leaving Belt' },
-        { location: 'TREAD', code: 'TR-16', description: 'Belt Leaving Casing' },
-        { location: 'TREAD', code: 'TR-17', description: 'Other (Explain In Comments)' },
-        // SHOULDER
-        { location: 'SHOULDER', code: 'SH-1', description: 'Puncture/Cut (To Interior)' },
-        { location: 'SHOULDER', code: 'SH-2', description: 'Puncture/Cut (Not To Interior)' },
-        { location: 'SHOULDER', code: 'SH-3', description: 'Diagonal Cracking' },
-        { location: 'SHOULDER', code: 'SH-4', description: 'Circumferential Crack' },
-        { location: 'SHOULDER', code: 'SH-5', description: 'Ozone Cracking' },
-        { location: 'SHOULDER', code: 'SH-6', description: 'Radial Split' },
-        { location: 'SHOULDER', code: 'SH-7', description: 'Migrating Wire' },
-        { location: 'SHOULDER', code: 'SH-8', description: 'Abuse/Heat Separation' },
-        { location: 'SHOULDER', code: 'SH-9', description: 'Separation' },
-        { location: 'SHOULDER', code: 'SH-10', description: 'Belt Edge Separation' },
-        { location: 'SHOULDER', code: 'SH-11', description: 'Other (Explain In Comments)' },
-        // SIDEWALL
-        { location: 'SIDEWALL', code: 'SW-1', description: 'Puncture/Cut (To Interior)' },
-        { location: 'SIDEWALL', code: 'SW-2', description: 'Puncture/Cut (Not To Interior)' },
-        { location: 'SIDEWALL', code: 'SW-3', description: 'Impact Break' },
-        { location: 'SIDEWALL', code: 'SW-4', description: 'Curbing Damage' },
-        { location: 'SIDEWALL', code: 'SW-5', description: 'Runflat Damage' },
-        { location: 'SIDEWALL', code: 'SW-6', description: 'Diagonal Cracking' },
-        { location: 'SIDEWALL', code: 'SW-7', description: 'Circumferential Cracking' },
-        { location: 'SIDEWALL', code: 'SW-8', description: 'Ozone Cracking' },
-        { location: 'SIDEWALL', code: 'SW-9', description: 'Cord Fatigue/CSU' },
-        { location: 'SIDEWALL', code: 'SW-10', description: 'Open Splice' },
-        { location: 'SIDEWALL', code: 'SW-11', description: 'Distorted Ply Cords' },
-        { location: 'SIDEWALL', code: 'SW-12', description: 'Bulge/Blister' },
-        { location: 'SIDEWALL', code: 'SW-13', description: 'Separation' },
-        { location: 'SIDEWALL', code: 'SW-14', description: 'Cut Separation' },
-        { location: 'SIDEWALL', code: 'SW-15', description: 'Other (Explain In Comments)' },
-        // BEAD
-        { location: 'BEAD', code: 'BD-1', description: 'Cut' },
-        { location: 'BEAD', code: 'BD-2', description: 'Mount/Dismount Damage' },
-        { location: 'BEAD', code: 'BD-3', description: 'Bent Bead' },
-        { location: 'BEAD', code: 'BD-4', description: 'Burned Bead' },
-        { location: 'BEAD', code: 'BD-5', description: 'Ozone Cracking' },
-        { location: 'BEAD', code: 'BD-6', description: 'Bead Crease' },
-        { location: 'BEAD', code: 'BD-7', description: 'Chafer Edge Separation' },
-        { location: 'BEAD', code: 'BD-8', description: 'Impact Chafer Edge Sep.' },
-        { location: 'BEAD', code: 'BD-9', description: 'Chafer Separation' },
-        { location: 'BEAD', code: 'BD-10', description: 'Ply Turn-Up Separation' },
-        { location: 'BEAD', code: 'BD-11', description: 'Bead Burst' },
-        { location: 'BEAD', code: 'BD-12', description: 'Other (Explain In Comments)' },
-        // INTERIOR
-        { location: 'INTERIOR', code: 'IN-1', description: 'Cut' },
-        { location: 'INTERIOR', code: 'IN-2', description: 'Cracks' },
-        { location: 'INTERIOR', code: 'IN-3', description: 'Blister/Bubble' },
-        { location: 'INTERIOR', code: 'IN-4', description: 'Open Splice' },
-        { location: 'INTERIOR', code: 'IN-5', description: 'Damaged (Foreign Object)' },
-        { location: 'INTERIOR', code: 'IN-6', description: 'Chafer Edge Separation' },
-        { location: 'INTERIOR', code: 'IN-7', description: 'Separation (From Innerliner)' },
-        { location: 'INTERIOR', code: 'IN-8', description: 'Separation (From Casing)' },
-        { location: 'INTERIOR', code: 'IN-9', description: 'Other (Explain In Comments)' },
-        // GENERAL
-        { location: 'GENERAL', code: 'GN-1', description: 'Improper Repair' },
-        { location: 'GENERAL', code: 'GN-2', description: 'Failure At Repair' },
-        { location: 'GENERAL', code: 'GN-3', description: 'Repairs Too Close' },
-        { location: 'GENERAL', code: 'GN-4', description: 'Missed Strive/Nail Hole (Retread)' },
-        { location: 'GENERAL', code: 'GN-5', description: 'Bond Line Failure (Retread)' },
-        { location: 'GENERAL', code: 'GN-6', description: 'Improper Buff' },
-        { location: 'GENERAL', code: 'GN-7', description: 'Branding Damage' },
-        { location: 'GENERAL', code: 'GN-8', description: 'Petroleum/Chemical Damage' },
-        { location: 'GENERAL', code: 'GN-9', description: 'Vehicle Damage' },
-        { location: 'GENERAL', code: 'GN-10', description: 'Dynamometer Damage' },
-        { location: 'GENERAL', code: 'GN-11', description: 'Foreign Material' },
-        { location: 'GENERAL', code: 'GN-12', description: 'Unknown' },
-        { location: 'GENERAL', code: 'GN-13', description: 'Customer Spec Not Met (Too Old)' },
-        { location: 'GENERAL', code: 'GN-14', description: 'Customer Spec Not Met (Too Many Repairs)' },
-        { location: 'GENERAL', code: 'GN-15', description: 'Customer Spec Not Met (Other)' },
+        // ===== USER MANAGEMENT TABLES =====
+        // Geographic data tables for user management
+        `CREATE TABLE IF NOT EXISTS countries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          code TEXT NOT NULL UNIQUE,
+          is_sadc INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS provinces (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL,
+          country_id INTEGER NOT NULL REFERENCES countries(id) ON DELETE CASCADE,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(name, country_id)
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS regions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL,
+          province_id INTEGER NOT NULL REFERENCES provinces(id) ON DELETE CASCADE,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(name, province_id)
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS stores (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL UNIQUE,
+          region_id INTEGER NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+          address TEXT,
+          phone TEXT,
+          manager_name TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        // Extended users table with geographic and profile data
+        `CREATE TABLE IF NOT EXISTS users_extended (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          phone TEXT,
+          employee_id TEXT UNIQUE,
+          country_id INTEGER REFERENCES countries(id),
+          province_id INTEGER REFERENCES provinces(id),
+          region_id INTEGER REFERENCES regions(id),
+          store_id INTEGER REFERENCES stores(id),
+          security_question_1 TEXT NOT NULL,
+          security_answer_1_hash TEXT NOT NULL,
+          security_question_2 TEXT NOT NULL,
+          security_answer_2_hash TEXT NOT NULL,
+          is_active INTEGER DEFAULT 1,
+          last_login DATETIME,
+          password_changed_at DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        // Create indexes for user management tables
+        `CREATE INDEX IF NOT EXISTS idx_provinces_country_id ON provinces(country_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_regions_province_id ON regions(province_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_stores_region_id ON stores(region_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_user_id ON users_extended(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_country_id ON users_extended(country_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_province_id ON users_extended(province_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_region_id ON users_extended(region_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_store_id ON users_extended(store_id)`
       ];
 
-      for (const damage of scrapDataRecords) {
-        await pool.query(
-          'INSERT INTO scrap_data (location, damage_code, damage_description) VALUES ($1, $2, $3)',
-          [damage.location, damage.code, damage.description]
-        );
-      }
-      console.log(`[DB] Seeded ${scrapDataRecords.length} scrap data records`);
-    }
+      // Execute SQLite migrations - tables first
+      const tableMigrations = [
+        `CREATE TABLE IF NOT EXISTS scraps (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_name TEXT,
+          customer_phone TEXT,
+          customer_email TEXT,
+          location TEXT,
+          report_date TEXT,
+          status TEXT,
+          items TEXT,
+          user_id INTEGER,
+          user_name TEXT,
+          store_id INTEGER,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
 
-    // Seed tyres table if empty
-    const checkTyres = await pool.query('SELECT COUNT(*) as count FROM tyres');
-    console.log('[DB] Tyres count:', checkTyres.rows[0].count);
-    if (checkTyres.rows[0].count == 0 || checkTyres.rows[0].count === '0') {
-      console.log('[DB] Seeding tyres table...');
-      const tyresRecords = [
-        { brand: 'Michelin', pattern: 'X Multi HDD', 'Ply Rating': '18PR', 'Original Tread Depth': '22.5', 'Load Rating': '156/150', 'Load Rating Duals': '156', 'Load Rating Singles': '150', 'Speed Rating Duals': 'K', 'Speed Rating Singles': 'L', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '65', 'Rim Size': '22.5' },
-        { brand: 'Bridgestone', pattern: 'M840', 'Ply Rating': '16PR', 'Original Tread Depth': '16.5', 'Load Rating': '150/145', 'Load Rating Duals': '150', 'Load Rating Singles': '145', 'Speed Rating Duals': 'J', 'Speed Rating Singles': 'K', 'Tube Rating': 'TL', 'Nominal Section Width': '295', 'Aspect Ratio': '80', 'Rim Size': '22.5' },
-        { brand: 'Continental', pattern: 'HS3', 'Ply Rating': '20PR', 'Original Tread Depth': '15.5', 'Load Rating': '160/150', 'Load Rating Duals': '160', 'Load Rating Singles': '150', 'Speed Rating Duals': 'L', 'Speed Rating Singles': 'M', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '70', 'Rim Size': '22.5' },
-        { brand: 'Sumitomo', pattern: 'ST909', 'Ply Rating': '18PR', 'Original Tread Depth': '17', 'Load Rating': '154/150', 'Load Rating Duals': '154', 'Load Rating Singles': '150', 'Speed Rating Duals': 'K', 'Speed Rating Singles': 'L', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '80', 'Rim Size': '22.5' },
-        { brand: 'Goodyear', pattern: 'KMAX S', 'Ply Rating': '16PR', 'Original Tread Depth': '17', 'Load Rating': '148/145', 'Load Rating Duals': '148', 'Load Rating Singles': '145', 'Speed Rating Duals': 'J', 'Speed Rating Singles': 'K', 'Tube Rating': 'TL', 'Nominal Section Width': '295', 'Aspect Ratio': '75', 'Rim Size': '22.5' }
+        `CREATE TABLE IF NOT EXISTS companies (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          contact_name TEXT,
+          email TEXT,
+          phone TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS depots (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          location TEXT NOT NULL,
+          contact_name TEXT,
+          email TEXT,
+          phone TEXT,
+          company_id INTEGER REFERENCES companies(id),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS tyres (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          brand VARCHAR(100) NOT NULL,
+          pattern VARCHAR(100) NOT NULL,
+          "Ply Rating" VARCHAR(50),
+          "Original Tread Depth" VARCHAR(50),
+          "Load Rating" VARCHAR(50),
+          "Load Rating Duals" VARCHAR(50),
+          "Load Rating Singles" VARCHAR(50),
+          "Speed Rating Duals" VARCHAR(10),
+          "Speed Rating Singles" VARCHAR(10),
+          "Tube Rating" VARCHAR(10),
+          "Nominal Section Width" VARCHAR(50),
+          "Aspect Ratio" VARCHAR(50),
+          "Rim Size" VARCHAR(50),
+          "Product Code" VARCHAR(50),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(brand, pattern, "Nominal Section Width", "Aspect Ratio", "Rim Size")
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS vehicle_configs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          item_code TEXT UNIQUE NOT NULL,
+          name TEXT NOT NULL,
+          tire_config TEXT,
+          tire_sizes TEXT,
+          ideal_pressures TEXT,
+          pressure_units TEXT,
+          spares INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        // User activity logging table
+        `CREATE TABLE IF NOT EXISTS user_activity_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          username TEXT,
+          activity_type TEXT NOT NULL,
+          activity_description TEXT,
+          table_name TEXT,
+          record_id INTEGER,
+          ip_address TEXT,
+          user_agent TEXT,
+          browser TEXT,
+          device TEXT,
+          os TEXT,
+          language TEXT,
+          screen_resolution TEXT,
+          timezone TEXT,
+          success INTEGER DEFAULT 1,
+          error_code TEXT,
+          error_message TEXT,
+          request_data TEXT,
+          response_data TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        // User sessions tracking table
+        `CREATE TABLE IF NOT EXISTS user_sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          username TEXT,
+          session_id TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          browser TEXT,
+          browser_version TEXT,
+          device TEXT,
+          device_type TEXT,
+          os TEXT,
+          os_version TEXT,
+          language TEXT,
+          languages TEXT,
+          screen_resolution TEXT,
+          viewport_size TEXT,
+          timezone TEXT,
+          platform TEXT,
+          cookie_enabled INTEGER,
+          do_not_track INTEGER,
+          login_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+          last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+          logout_time DATETIME,
+          session_duration INTEGER,
+          is_active INTEGER DEFAULT 1
+        )`,
+
+        // User drafts table (auto-saved form data for offline persistence)
+        `CREATE TABLE IF NOT EXISTS user_drafts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          form_type TEXT NOT NULL,
+          form_name TEXT NOT NULL,
+          draft_data TEXT,
+          sync_status TEXT DEFAULT 'pending',
+          last_saved DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        // Create inspections_drafts table for auto-save functionality
+        `CREATE TABLE IF NOT EXISTS inspections_drafts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          draft_id TEXT UNIQUE NOT NULL,
+          user_id INTEGER NOT NULL,
+          header TEXT NOT NULL,
+          vehicles TEXT NOT NULL,
+          last_saved DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        // Create vehicle_configurations table if it doesn't exist
+        `CREATE TABLE IF NOT EXISTS vehicle_configurations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT UNIQUE NOT NULL,
+          positionName TEXT NOT NULL,
+          tireCount INTEGER DEFAULT 4,
+          status TEXT DEFAULT 'approved',
+          suggestedBy TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        // Create configuration_suggestions table for user suggestions
+        `CREATE TABLE IF NOT EXISTS configuration_suggestions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT NOT NULL,
+          positionName TEXT NOT NULL,
+          tireCount INTEGER DEFAULT 4,
+          suggestedBy TEXT NOT NULL,
+          status TEXT DEFAULT 'pending',
+          admin_notes TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          approved_at DATETIME
+        )`,
+
+        // Create scrap_data table
+        `CREATE TABLE IF NOT EXISTS scrap_data (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          location VARCHAR(100) NOT NULL,
+          damage_code VARCHAR(50) NOT NULL,
+          damage_description TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(location, damage_code)
+        )`,
+
+        // ===== USER MANAGEMENT TABLES =====
+        // Geographic data tables for user management
+        `CREATE TABLE IF NOT EXISTS countries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          code TEXT NOT NULL UNIQUE,
+          is_sadc INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS provinces (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL,
+          country_id INTEGER NOT NULL REFERENCES countries(id) ON DELETE CASCADE,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(name, country_id)
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS regions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL,
+          province_id INTEGER NOT NULL REFERENCES provinces(id) ON DELETE CASCADE,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(name, province_id)
+        )`,
+
+        `CREATE TABLE IF NOT EXISTS stores (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL UNIQUE,
+          region_id INTEGER NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+          address TEXT,
+          phone TEXT,
+          manager_name TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+
+        // Extended users table with geographic and profile data
+        `CREATE TABLE IF NOT EXISTS users_extended (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          phone TEXT,
+          employee_id TEXT UNIQUE,
+          country_id INTEGER REFERENCES countries(id),
+          province_id INTEGER REFERENCES provinces(id),
+          region_id INTEGER REFERENCES regions(id),
+          store_id INTEGER REFERENCES stores(id),
+          security_question_1 TEXT NOT NULL,
+          security_answer_1_hash TEXT NOT NULL,
+          security_question_2 TEXT NOT NULL,
+          security_answer_2_hash TEXT NOT NULL,
+          is_active INTEGER DEFAULT 1,
+          last_login DATETIME,
+          password_changed_at DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`
       ];
 
-      for (const tyre of tyresRecords) {
-        await pool.query(
-          'INSERT INTO tyres (brand, pattern, "Ply Rating", "Original Tread Depth", "Load Rating", "Load Rating Duals", "Load Rating Singles", "Speed Rating Duals", "Speed Rating Singles", "Tube Rating", "Nominal Section Width", "Aspect Ratio", "Rim Size") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
-          [tyre.brand, tyre.pattern, tyre['Ply Rating'], tyre['Original Tread Depth'], tyre['Load Rating'], tyre['Load Rating Duals'], tyre['Load Rating Singles'], tyre['Speed Rating Duals'], tyre['Speed Rating Singles'], tyre['Tube Rating'], tyre['Nominal Section Width'], tyre['Aspect Ratio'], tyre['Rim Size']]
-        );
+      // Execute table migrations first
+      for (const sql of tableMigrations) {
+        await new Promise((resolve, reject) => {
+          db.run(sql, (err) => {
+            if (err && !err.message.includes('duplicate column') && !err.message.includes('already exists')) {
+              console.error('[DB] SQLite table migration failed:', sql, err.message);
+              reject(err);
+            } else {
+              resolve();
+            }
+          });
+        });
       }
-      console.log(`[DB] Seeded ${tyresRecords.length} tyre records`);
+
+      // Now execute index and alter migrations
+      const indexMigrations = [
+        // Create index for faster queries
+        `CREATE INDEX IF NOT EXISTS idx_activity_user_id ON user_activity_log(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_activity_created_at ON user_activity_log(created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_activity_type ON user_activity_log(activity_type)`,
+
+        // Create indexes for sessions
+        `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_sessions_is_active ON user_sessions(is_active)`,
+        `CREATE INDEX IF NOT EXISTS idx_sessions_login_time ON user_sessions(login_time)`,
+
+        // Create indexes for drafts
+        `CREATE INDEX IF NOT EXISTS idx_drafts_user_id ON user_drafts(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_drafts_form_type ON user_drafts(form_type)`,
+        `CREATE INDEX IF NOT EXISTS idx_drafts_last_saved ON user_drafts(last_saved)`,
+
+        // Create indexes for drafts
+        `CREATE INDEX IF NOT EXISTS idx_inspections_drafts_draft_id ON inspections_drafts(draft_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_inspections_drafts_user_id ON inspections_drafts(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_inspections_drafts_last_saved ON inspections_drafts(last_saved)`,
+
+        // Create indexes
+        `CREATE INDEX IF NOT EXISTS idx_vehicle_configs_code ON vehicle_configurations(code)`,
+        `CREATE INDEX IF NOT EXISTS idx_config_suggestions_status ON configuration_suggestions(status)`,
+
+        // Create index on scrap_data
+        `CREATE INDEX IF NOT EXISTS idx_scrap_data_location ON scrap_data(location)`,
+        `CREATE INDEX IF NOT EXISTS idx_scrap_data_code ON scrap_data(damage_code)`,
+
+        // Create indexes for user management tables
+        `CREATE INDEX IF NOT EXISTS idx_provinces_country_id ON provinces(country_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_regions_province_id ON regions(province_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_stores_region_id ON stores(region_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_user_id ON users_extended(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_country_id ON users_extended(country_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_province_id ON users_extended(province_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_region_id ON users_extended(region_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_users_extended_store_id ON users_extended(store_id)`,
+
+        // Add columns to tyres table for triple depth readings if they don't exist
+        `ALTER TABLE tyres ADD COLUMN depthInner REAL`,
+        `ALTER TABLE tyres ADD COLUMN depthMiddle REAL`,
+        `ALTER TABLE tyres ADD COLUMN depthOuter REAL`,
+        `ALTER TABLE tyres ADD COLUMN comments TEXT`
+      ];
+
+      // Helper: checks whether a table exists
+      const sqliteTableExists = async (tableName) => {
+        return await new Promise((resolve, reject) => {
+          db.get("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [tableName], (err, row) => {
+            if (err) return reject(err);
+            resolve(!!row);
+          });
+        });
+      };
+
+      // Helper: checks whether a column exists in a table
+      const sqliteColumnExists = async (tableName, columnName) => {
+        return await new Promise((resolve, reject) => {
+          db.all(`PRAGMA table_info(${tableName})`, (err, rows) => {
+            if (err) return reject(err);
+            const exists = rows && rows.some(r => r.name === columnName);
+            resolve(!!exists);
+          });
+        });
+      };
+
+      // Execute index and alter migrations with guards to avoid "no such column" errors
+      for (const sql of indexMigrations) {
+        try {
+          // If this is an ALTER TABLE ADD COLUMN, extract table and column
+          const alterMatch = sql.match(/^ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+(\w+)/i);
+          if (alterMatch) {
+            const table = alterMatch[1];
+            const column = alterMatch[2];
+            const tableExists = await sqliteTableExists(table);
+            if (!tableExists) {
+              console.log(`[DB] Skipping ALTER for missing table ${table}`);
+              continue;
+            }
+            const colExists = await sqliteColumnExists(table, column);
+            if (colExists) {
+              console.log(`[DB] Column ${column} already exists on ${table}, skipping ALTER`);
+              continue;
+            }
+            // run alter
+            await new Promise((resolve, reject) => db.run(sql, (e) => e ? reject(e) : resolve()));
+            continue;
+          }
+
+          // If this is a CREATE INDEX ON table(column), ensure table and column exist first
+          const indexMatch = sql.match(/ON\s+(\w+)\s*\(\s*(\w+)\s*\)/i);
+          if (indexMatch) {
+            const table = indexMatch[1];
+            const column = indexMatch[2];
+            const tableExists = await sqliteTableExists(table);
+            if (!tableExists) {
+              console.log(`[DB] Skipping index creation: table ${table} does not exist`);
+              continue;
+            }
+            const colExists = await sqliteColumnExists(table, column);
+            if (!colExists) {
+              console.log(`[DB] Skipping index creation: column ${column} on ${table} does not exist`);
+              continue;
+            }
+            await new Promise((resolve, reject) => db.run(sql, (e) => e ? reject(e) : resolve()));
+            continue;
+          }
+
+          // Fallback: run the SQL and ignore known benign errors
+          await new Promise((resolve, reject) => {
+            db.run(sql, (err) => {
+              if (err && !err.message.includes('duplicate column') && !err.message.includes('already exists')) {
+                console.error('[DB] SQLite index/alter migration failed:', sql, err.message);
+                return reject(err);
+              }
+              resolve();
+            });
+          });
+        } catch (err) {
+          console.log('[DB] Ignored migration error:', err.message);
+        }
+      }
+
+      // Seed geographic data for SQLite
+      await seedGeographicDataSQLite(db);
+
+      // Seed scrap_data table if empty for SQLite
+      const scrapDataCount = await new Promise((resolve, reject) => {
+        db.get('SELECT COUNT(*) as count FROM scrap_data', (err, row) => {
+          if (err) reject(err);
+          else resolve(row.count);
+        });
+      });
+
+      if (scrapDataCount == 0) {
+        console.log('[DB] Seeding scrap_data table...');
+        const scrapDataRecords = [
+          // TREAD
+          { location: 'TREAD', code: 'TR-1', description: 'Puncture/Cut (To Interior)' },
+          { location: 'TREAD', code: 'TR-2', description: 'Puncture/Cut (Not To Interior)' },
+          { location: 'TREAD', code: 'TR-3', description: 'Chipping/Chunking' },
+          { location: 'TREAD', code: 'TR-4', description: 'Cut Separation' },
+          { location: 'TREAD', code: 'TR-5', description: 'Impact Break' },
+          { location: 'TREAD', code: 'TR-6', description: 'Stone Retention Damage' },
+          { location: 'TREAD', code: 'TR-7', description: 'Brake Lock/Chipping' },
+          { location: 'TREAD', code: 'TR-8', description: 'Irregular Wear' },
+          { location: 'TREAD', code: 'TR-9', description: 'Worn Too Far' },
+          { location: 'TREAD', code: 'TR-10', description: 'Defense Groove Tearing' },
+          { location: 'TREAD', code: 'TR-11', description: 'Rib/Lug Tearing' },
+          { location: 'TREAD', code: 'TR-12', description: 'Groove Cracking' },
+          { location: 'TREAD', code: 'TR-13', description: 'Open Splice' },
+          { location: 'TREAD', code: 'TR-14', description: 'Tread Leaving Belt' },
+          { location: 'TREAD', code: 'TR-15', description: 'Belt Leaving Belt' },
+          { location: 'TREAD', code: 'TR-16', description: 'Belt Leaving Casing' },
+          { location: 'TREAD', code: 'TR-17', description: 'Other (Explain In Comments)' },
+          // SHOULDER
+          { location: 'SHOULDER', code: 'SH-1', description: 'Puncture/Cut (To Interior)' },
+          { location: 'SHOULDER', code: 'SH-2', description: 'Puncture/Cut (Not To Interior)' },
+          { location: 'SHOULDER', code: 'SH-3', description: 'Diagonal Cracking' },
+          { location: 'SHOULDER', code: 'SH-4', description: 'Circumferential Crack' },
+          { location: 'SHOULDER', code: 'SH-5', description: 'Ozone Cracking' },
+          { location: 'SHOULDER', code: 'SH-6', description: 'Radial Split' },
+          { location: 'SHOULDER', code: 'SH-7', description: 'Migrating Wire' },
+          { location: 'SHOULDER', code: 'SH-8', description: 'Abuse/Heat Separation' },
+          { location: 'SHOULDER', code: 'SH-9', description: 'Separation' },
+          { location: 'SHOULDER', code: 'SH-10', description: 'Belt Edge Separation' },
+          { location: 'SHOULDER', code: 'SH-11', description: 'Other (Explain In Comments)' },
+          // SIDEWALL
+          { location: 'SIDEWALL', code: 'SW-1', description: 'Puncture/Cut (To Interior)' },
+          { location: 'SIDEWALL', code: 'SW-2', description: 'Puncture/Cut (Not To Interior)' },
+          { location: 'SIDEWALL', code: 'SW-3', description: 'Impact Break' },
+          { location: 'SIDEWALL', code: 'SW-4', description: 'Curbing Damage' },
+          { location: 'SIDEWALL', code: 'SW-5', description: 'Runflat Damage' },
+          { location: 'SIDEWALL', code: 'SW-6', description: 'Diagonal Cracking' },
+          { location: 'SIDEWALL', code: 'SW-7', description: 'Circumferential Cracking' },
+          { location: 'SIDEWALL', code: 'SW-8', description: 'Ozone Cracking' },
+          { location: 'SIDEWALL', code: 'SW-9', description: 'Cord Fatigue/CSU' },
+          { location: 'SIDEWALL', code: 'SW-10', description: 'Open Splice' },
+          { location: 'SIDEWALL', code: 'SW-11', description: 'Distorted Ply Cords' },
+          { location: 'SIDEWALL', code: 'SW-12', description: 'Bulge/Blister' },
+          { location: 'SIDEWALL', code: 'SW-13', description: 'Separation' },
+          { location: 'SIDEWALL', code: 'SW-14', description: 'Cut Separation' },
+          { location: 'SIDEWALL', code: 'SW-15', description: 'Other (Explain In Comments)' },
+          // BEAD
+          { location: 'BEAD', code: 'BD-1', description: 'Cut' },
+          { location: 'BEAD', code: 'BD-2', description: 'Mount/Dismount Damage' },
+          { location: 'BEAD', code: 'BD-3', description: 'Bent Bead' },
+          { location: 'BEAD', code: 'BD-4', description: 'Burned Bead' },
+          { location: 'BEAD', code: 'BD-5', description: 'Ozone Cracking' },
+          { location: 'BEAD', code: 'BD-6', description: 'Bead Crease' },
+          { location: 'BEAD', code: 'BD-7', description: 'Chafer Edge Separation' },
+          { location: 'BEAD', code: 'BD-8', description: 'Impact Chafer Edge Sep.' },
+          { location: 'BEAD', code: 'BD-9', description: 'Chafer Separation' },
+          { location: 'BEAD', code: 'BD-10', description: 'Ply Turn-Up Separation' },
+          { location: 'BEAD', code: 'BD-11', description: 'Bead Burst' },
+          { location: 'BEAD', code: 'BD-12', description: 'Other (Explain In Comments)' },
+          // INTERIOR
+          { location: 'INTERIOR', code: 'IN-1', description: 'Cut' },
+          { location: 'INTERIOR', code: 'IN-2', description: 'Cracks' },
+          { location: 'INTERIOR', code: 'IN-3', description: 'Blister/Bubble' },
+          { location: 'INTERIOR', code: 'IN-4', description: 'Open Splice' },
+          { location: 'INTERIOR', code: 'IN-5', description: 'Damaged (Foreign Object)' },
+          { location: 'INTERIOR', code: 'IN-6', description: 'Chafer Edge Separation' },
+          { location: 'INTERIOR', code: 'IN-7', description: 'Separation (From Innerliner)' },
+          { location: 'INTERIOR', code: 'IN-8', description: 'Separation (From Casing)' },
+          { location: 'INTERIOR', code: 'IN-9', description: 'Other (Explain In Comments)' },
+          // GENERAL
+          { location: 'GENERAL', code: 'GN-1', description: 'Improper Repair' },
+          { location: 'GENERAL', code: 'GN-2', description: 'Failure At Repair' },
+          { location: 'GENERAL', code: 'GN-3', description: 'Repairs Too Close' },
+          { location: 'GENERAL', code: 'GN-4', description: 'Missed Strive/Nail Hole (Retread)' },
+          { location: 'GENERAL', code: 'GN-5', description: 'Bond Line Failure (Retread)' },
+          { location: 'GENERAL', code: 'GN-6', description: 'Improper Buff' },
+          { location: 'GENERAL', code: 'GN-7', description: 'Branding Damage' },
+          { location: 'GENERAL', code: 'GN-8', description: 'Petroleum/Chemical Damage' },
+          { location: 'GENERAL', code: 'GN-9', description: 'Vehicle Damage' },
+          { location: 'GENERAL', code: 'GN-10', description: 'Dynamometer Damage' },
+          { location: 'GENERAL', code: 'GN-11', description: 'Foreign Material' },
+          { location: 'GENERAL', code: 'GN-12', description: 'Unknown' },
+          { location: 'GENERAL', code: 'GN-13', description: 'Customer Spec Not Met (Too Old)' },
+          { location: 'GENERAL', code: 'GN-14', description: 'Customer Spec Not Met (Too Many Repairs)' },
+          { location: 'GENERAL', code: 'GN-15', description: 'Customer Spec Not Met (Other)' },
+        ];
+
+        for (const damage of scrapDataRecords) {
+          await new Promise((resolve, reject) => {
+            db.run(
+              'INSERT OR IGNORE INTO scrap_data (location, damage_code, damage_description) VALUES (?, ?, ?)',
+              [damage.location, damage.code, damage.description],
+              (err) => {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
+        }
+        console.log(`[DB] Seeded ${scrapDataRecords.length} scrap data records`);
+      }
+
+      // Seed tyres table if empty for SQLite
+      const tyresCount = await new Promise((resolve, reject) => {
+        db.get('SELECT COUNT(*) as count FROM tyres', (err, row) => {
+          if (err) reject(err);
+          else resolve(row.count);
+        });
+      });
+
+      if (tyresCount == 0) {
+        console.log('[DB] Seeding tyres table...');
+        const tyresRecords = [
+          { brand: 'Michelin', pattern: 'X Multi HDD', 'Ply Rating': '18PR', 'Original Tread Depth': '22.5', 'Load Rating': '156/150', 'Load Rating Duals': '156', 'Load Rating Singles': '150', 'Speed Rating Duals': 'K', 'Speed Rating Singles': 'L', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '65', 'Rim Size': '22.5' },
+          { brand: 'Bridgestone', pattern: 'M840', 'Ply Rating': '16PR', 'Original Tread Depth': '16.5', 'Load Rating': '150/145', 'Load Rating Duals': '150', 'Load Rating Singles': '145', 'Speed Rating Duals': 'J', 'Speed Rating Singles': 'K', 'Tube Rating': 'TL', 'Nominal Section Width': '295', 'Aspect Ratio': '80', 'Rim Size': '22.5' },
+          { brand: 'Continental', pattern: 'HS3', 'Ply Rating': '20PR', 'Original Tread Depth': '15.5', 'Load Rating': '160/150', 'Load Rating Duals': '160', 'Load Rating Singles': '150', 'Speed Rating Duals': 'L', 'Speed Rating Singles': 'M', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '70', 'Rim Size': '22.5' },
+          { brand: 'Sumitomo', pattern: 'ST909', 'Ply Rating': '18PR', 'Original Tread Depth': '17', 'Load Rating': '154/150', 'Load Rating Duals': '154', 'Load Rating Singles': '150', 'Speed Rating Duals': 'K', 'Speed Rating Singles': 'L', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '80', 'Rim Size': '22.5' },
+          { brand: 'Goodyear', pattern: 'KMAX S', 'Ply Rating': '16PR', 'Original Tread Depth': '17', 'Load Rating': '148/145', 'Load Rating Duals': '148', 'Load Rating Singles': '145', 'Speed Rating Duals': 'J', 'Speed Rating Singles': 'K', 'Tube Rating': 'TL', 'Nominal Section Width': '295', 'Aspect Ratio': '75', 'Rim Size': '22.5' }
+        ];
+
+        for (const tyre of tyresRecords) {
+          await new Promise((resolve, reject) => {
+            db.run(
+              'INSERT OR IGNORE INTO tyres (brand, pattern, "Ply Rating", "Original Tread Depth", "Load Rating", "Load Rating Duals", "Load Rating Singles", "Speed Rating Duals", "Speed Rating Singles", "Tube Rating", "Nominal Section Width", "Aspect Ratio", "Rim Size") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [tyre.brand, tyre.pattern, tyre['Ply Rating'], tyre['Original Tread Depth'], tyre['Load Rating'], tyre['Load Rating Duals'], tyre['Load Rating Singles'], tyre['Speed Rating Duals'], tyre['Speed Rating Singles'], tyre['Tube Rating'], tyre['Nominal Section Width'], tyre['Aspect Ratio'], tyre['Rim Size']],
+              (err) => {
+                if (err) reject(err);
+                else resolve();
+              }
+            );
+          });
+        }
+        console.log(`[DB] Seeded ${tyresRecords.length} tyre records`);
+      }
+
+    } else {
+      // PostgreSQL implementation
+      const createScrapsSql = `
+        CREATE TABLE IF NOT EXISTS "scraps" (
+          id SERIAL PRIMARY KEY,
+          customer_name TEXT,
+          customer_phone TEXT,
+          customer_email TEXT,
+          location TEXT,
+          report_date TEXT,
+          status TEXT,
+          items JSONB,
+          user_id INTEGER,
+          user_name TEXT,
+          store_id INTEGER,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createScrapsSql);
+
+      const createCompaniesSql = `
+        CREATE TABLE IF NOT EXISTS "companies" (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          contact_name TEXT,
+          email TEXT,
+          phone TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createCompaniesSql);
+
+      const createDepotsSql = `
+        CREATE TABLE IF NOT EXISTS "depots" (
+          id SERIAL PRIMARY KEY,
+          location TEXT NOT NULL,
+          contact_name TEXT,
+          email TEXT,
+          phone TEXT,
+          company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createDepotsSql);
+
+      const createTyresSql = `
+        CREATE TABLE IF NOT EXISTS "tyres" (
+          id SERIAL PRIMARY KEY,
+          brand VARCHAR(100) NOT NULL,
+          pattern VARCHAR(100) NOT NULL,
+          "Ply Rating" VARCHAR(50),
+          "Original Tread Depth" VARCHAR(50),
+          "Load Rating" VARCHAR(50),
+          "Load Rating Duals" VARCHAR(50),
+          "Load Rating Singles" VARCHAR(50),
+          "Speed Rating Duals" VARCHAR(10),
+          "Speed Rating Singles" VARCHAR(10),
+          "Tube Rating" VARCHAR(10),
+          "Nominal Section Width" VARCHAR(50),
+          "Aspect Ratio" VARCHAR(50),
+          "Rim Size" VARCHAR(50),
+          "Product Code" VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(brand, pattern, "Nominal Section Width", "Aspect Ratio", "Rim Size")
+        );
+      `;
+      await pool.query(createTyresSql);
+
+      const createVehicleConfigsSql = `
+        CREATE TABLE IF NOT EXISTS "vehicle_configs" (
+          id SERIAL PRIMARY KEY,
+          item_code TEXT UNIQUE NOT NULL,
+          name TEXT NOT NULL,
+          tire_config TEXT,
+          tire_sizes JSONB,
+          ideal_pressures JSONB,
+          pressure_units JSONB,
+          spares INTEGER DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createVehicleConfigsSql);
+
+      // User activity logging table
+      const createActivityLogSql = `
+        CREATE TABLE IF NOT EXISTS "user_activity_log" (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER,
+          username TEXT,
+          activity_type TEXT NOT NULL,
+          activity_description TEXT,
+          table_name TEXT,
+          record_id INTEGER,
+          ip_address TEXT,
+          user_agent TEXT,
+          browser TEXT,
+          device TEXT,
+          os TEXT,
+          language TEXT,
+          screen_resolution TEXT,
+          timezone TEXT,
+          success BOOLEAN DEFAULT true,
+          error_code TEXT,
+          error_message TEXT,
+          request_data JSONB,
+          response_data JSONB,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createActivityLogSql);
+
+      // Create index for faster queries
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_activity_user_id ON user_activity_log(user_id);
+        CREATE INDEX IF NOT EXISTS idx_activity_created_at ON user_activity_log(created_at);
+        CREATE INDEX IF NOT EXISTS idx_activity_type ON user_activity_log(activity_type);
+      `);
+
+      // User sessions tracking table
+      const createUserSessionsSql = `
+        CREATE TABLE IF NOT EXISTS "user_sessions" (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER,
+          username TEXT,
+          session_id TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          browser TEXT,
+          browser_version TEXT,
+          device TEXT,
+          device_type TEXT,
+          os TEXT,
+          os_version TEXT,
+          language TEXT,
+          languages JSONB,
+          screen_resolution TEXT,
+          viewport_size TEXT,
+          timezone TEXT,
+          platform TEXT,
+          cookie_enabled BOOLEAN,
+          do_not_track BOOLEAN,
+          login_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          logout_time TIMESTAMP WITH TIME ZONE,
+          session_duration INTEGER,
+          is_active BOOLEAN DEFAULT true
+        );
+      `;
+      await pool.query(createUserSessionsSql);
+
+      // Create indexes for sessions
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON user_sessions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_is_active ON user_sessions(is_active);
+        CREATE INDEX IF NOT EXISTS idx_sessions_login_time ON user_sessions(login_time);
+      `);
+
+      // User drafts table (auto-saved form data for offline persistence)
+      const createUserDraftsSql = `
+        CREATE TABLE IF NOT EXISTS "user_drafts" (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          form_type TEXT NOT NULL,
+          form_name TEXT NOT NULL,
+          draft_data JSONB,
+          sync_status TEXT DEFAULT 'pending',
+          last_saved TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createUserDraftsSql);
+
+      // Create indexes for drafts
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_drafts_user_id ON user_drafts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_drafts_form_type ON user_drafts(form_type);
+        CREATE INDEX IF NOT EXISTS idx_drafts_last_saved ON user_drafts(last_saved);
+      `);
+
+      // Add columns to tyres table for triple depth readings if they don't exist
+      try {
+        await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthInner" NUMERIC(5,2);`);
+        await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthMiddle" NUMERIC(5,2);`);
+        await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "depthOuter" NUMERIC(5,2);`);
+        await pool.query(`ALTER TABLE "tyres" ADD COLUMN IF NOT EXISTS "comments" TEXT;`);
+      } catch (alterErr) {
+        // Column might already exist, which is fine
+        console.log('[DB] Tire columns update (expected if already exist):', alterErr.message);
+      }
+
+      // Create inspections_drafts table for auto-save functionality
+      const createInspectionsDraftsSql = `
+        CREATE TABLE IF NOT EXISTS "inspections_drafts" (
+          id SERIAL PRIMARY KEY,
+          draft_id TEXT UNIQUE NOT NULL,
+          user_id INTEGER NOT NULL,
+          header JSONB NOT NULL,
+          vehicles JSONB NOT NULL,
+          last_saved TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createInspectionsDraftsSql);
+
+      // Create indexes for drafts
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_inspections_drafts_draft_id ON inspections_drafts(draft_id);
+        CREATE INDEX IF NOT EXISTS idx_inspections_drafts_user_id ON inspections_drafts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_inspections_drafts_last_saved ON inspections_drafts(last_saved);
+      `);
+
+      // Create vehicle_configurations table if it doesn't exist
+      const createVehicleConfigurationsSql = `
+        CREATE TABLE IF NOT EXISTS "vehicle_configurations" (
+          id SERIAL PRIMARY KEY,
+          code TEXT UNIQUE NOT NULL,
+          positionName TEXT NOT NULL,
+          tireCount INTEGER DEFAULT 4,
+          status TEXT DEFAULT 'approved',
+          suggestedBy TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createVehicleConfigurationsSql);
+
+      // Create configuration_suggestions table for user suggestions
+      const createConfigSuggestionsSql = `
+        CREATE TABLE IF NOT EXISTS "configuration_suggestions" (
+          id SERIAL PRIMARY KEY,
+          code TEXT NOT NULL,
+          positionName TEXT NOT NULL,
+          tireCount INTEGER DEFAULT 4,
+          suggestedBy TEXT NOT NULL,
+          status TEXT DEFAULT 'pending',
+          admin_notes TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          approved_at TIMESTAMP WITH TIME ZONE
+        );
+      `;
+      await pool.query(createConfigSuggestionsSql);
+
+      // Create indexes
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_vehicle_configs_code ON vehicle_configurations(code);
+        CREATE INDEX IF NOT EXISTS idx_config_suggestions_status ON configuration_suggestions(status);
+      `);
+
+      // Create scrap_data table
+      const createScrapDataSql = `
+        CREATE TABLE IF NOT EXISTS "scrap_data" (
+          id SERIAL PRIMARY KEY,
+          location VARCHAR(100) NOT NULL,
+          damage_code VARCHAR(50) NOT NULL,
+          damage_description TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(location, damage_code)
+        )
+      `;
+      await pool.query(createScrapDataSql);
+
+      // Create index on scrap_data
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_scrap_data_location ON scrap_data(location)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_scrap_data_code ON scrap_data(damage_code)');
+
+      // ===== USER MANAGEMENT TABLES =====
+      // Geographic data tables for user management
+      const createCountriesSql = `
+        CREATE TABLE IF NOT EXISTS "countries" (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          code TEXT NOT NULL UNIQUE,
+          is_sadc INTEGER DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createCountriesSql);
+
+      const createProvincesSql = `
+        CREATE TABLE IF NOT EXISTS "provinces" (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL,
+          country_id INTEGER NOT NULL REFERENCES countries(id) ON DELETE CASCADE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE(name, country_id)
+        );
+      `;
+      await pool.query(createProvincesSql);
+
+      const createRegionsSql = `
+        CREATE TABLE IF NOT EXISTS "regions" (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL,
+          province_id INTEGER NOT NULL REFERENCES provinces(id) ON DELETE CASCADE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE(name, province_id)
+        );
+      `;
+      await pool.query(createRegionsSql);
+
+      const createStoresSql = `
+        CREATE TABLE IF NOT EXISTS "stores" (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          code TEXT NOT NULL UNIQUE,
+          region_id INTEGER NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+          address TEXT,
+          phone TEXT,
+          manager_name TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createStoresSql);
+
+      // Extended users table with geographic and profile data
+      const createUsersExtendedSql = `
+        CREATE TABLE IF NOT EXISTS "users_extended" (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          phone TEXT,
+          employee_id TEXT UNIQUE,
+          country_id INTEGER REFERENCES countries(id),
+          province_id INTEGER REFERENCES provinces(id),
+          region_id INTEGER REFERENCES regions(id),
+          store_id INTEGER REFERENCES stores(id),
+          security_question_1 TEXT NOT NULL,
+          security_answer_1_hash TEXT NOT NULL,
+          security_question_2 TEXT NOT NULL,
+          security_answer_2_hash TEXT NOT NULL,
+          is_active INTEGER DEFAULT 1,
+          last_login TIMESTAMP WITH TIME ZONE,
+          password_changed_at TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `;
+      await pool.query(createUsersExtendedSql);
+
+      // Create indexes for user management tables
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_provinces_country_id ON provinces(country_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_regions_province_id ON regions(province_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_stores_region_id ON stores(region_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_extended_user_id ON users_extended(user_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_extended_country_id ON users_extended(country_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_extended_province_id ON users_extended(province_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_extended_region_id ON users_extended(region_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_users_extended_store_id ON users_extended(store_id)');
+
+      // Seed geographic data
+      await seedGeographicData();
+
+      // Seed scrap_data table if empty
+      const checkScrapData = await pool.query('SELECT COUNT(*) as count FROM scrap_data');
+      console.log('[DB] Scrap data count:', checkScrapData.rows[0].count);
+      if (checkScrapData.rows[0].count == 0 || checkScrapData.rows[0].count === '0') {
+        console.log('[DB] Seeding scrap_data table...');
+        const scrapDataRecords = [
+          // TREAD
+          { location: 'TREAD', code: 'TR-1', description: 'Puncture/Cut (To Interior)' },
+          { location: 'TREAD', code: 'TR-2', description: 'Puncture/Cut (Not To Interior)' },
+          { location: 'TREAD', code: 'TR-3', description: 'Chipping/Chunking' },
+          { location: 'TREAD', code: 'TR-4', description: 'Cut Separation' },
+          { location: 'TREAD', code: 'TR-5', description: 'Impact Break' },
+          { location: 'TREAD', code: 'TR-6', description: 'Stone Retention Damage' },
+          { location: 'TREAD', code: 'TR-7', description: 'Brake Lock/Chipping' },
+          { location: 'TREAD', code: 'TR-8', description: 'Irregular Wear' },
+          { location: 'TREAD', code: 'TR-9', description: 'Worn Too Far' },
+          { location: 'TREAD', code: 'TR-10', description: 'Defense Groove Tearing' },
+          { location: 'TREAD', code: 'TR-11', description: 'Rib/Lug Tearing' },
+          { location: 'TREAD', code: 'TR-12', description: 'Groove Cracking' },
+          { location: 'TREAD', code: 'TR-13', description: 'Open Splice' },
+          { location: 'TREAD', code: 'TR-14', description: 'Tread Leaving Belt' },
+          { location: 'TREAD', code: 'TR-15', description: 'Belt Leaving Belt' },
+          { location: 'TREAD', code: 'TR-16', description: 'Belt Leaving Casing' },
+          { location: 'TREAD', code: 'TR-17', description: 'Other (Explain In Comments)' },
+          // SHOULDER
+          { location: 'SHOULDER', code: 'SH-1', description: 'Puncture/Cut (To Interior)' },
+          { location: 'SHOULDER', code: 'SH-2', description: 'Puncture/Cut (Not To Interior)' },
+          { location: 'SHOULDER', code: 'SH-3', description: 'Diagonal Cracking' },
+          { location: 'SHOULDER', code: 'SH-4', description: 'Circumferential Crack' },
+          { location: 'SHOULDER', code: 'SH-5', description: 'Ozone Cracking' },
+          { location: 'SHOULDER', code: 'SH-6', description: 'Radial Split' },
+          { location: 'SHOULDER', code: 'SH-7', description: 'Migrating Wire' },
+          { location: 'SHOULDER', code: 'SH-8', description: 'Abuse/Heat Separation' },
+          { location: 'SHOULDER', code: 'SH-9', description: 'Separation' },
+          { location: 'SHOULDER', code: 'SH-10', description: 'Belt Edge Separation' },
+          { location: 'SHOULDER', code: 'SH-11', description: 'Other (Explain In Comments)' },
+          // SIDEWALL
+          { location: 'SIDEWALL', code: 'SW-1', description: 'Puncture/Cut (To Interior)' },
+          { location: 'SIDEWALL', code: 'SW-2', description: 'Puncture/Cut (Not To Interior)' },
+          { location: 'SIDEWALL', code: 'SW-3', description: 'Impact Break' },
+          { location: 'SIDEWALL', code: 'SW-4', description: 'Curbing Damage' },
+          { location: 'SIDEWALL', code: 'SW-5', description: 'Runflat Damage' },
+          { location: 'SIDEWALL', code: 'SW-6', description: 'Diagonal Cracking' },
+          { location: 'SIDEWALL', code: 'SW-7', description: 'Circumferential Cracking' },
+          { location: 'SIDEWALL', code: 'SW-8', description: 'Ozone Cracking' },
+          { location: 'SIDEWALL', code: 'SW-9', description: 'Cord Fatigue/CSU' },
+          { location: 'SIDEWALL', code: 'SW-10', description: 'Open Splice' },
+          { location: 'SIDEWALL', code: 'SW-11', description: 'Distorted Ply Cords' },
+          { location: 'SIDEWALL', code: 'SW-12', description: 'Bulge/Blister' },
+          { location: 'SIDEWALL', code: 'SW-13', description: 'Separation' },
+          { location: 'SIDEWALL', code: 'SW-14', description: 'Cut Separation' },
+          { location: 'SIDEWALL', code: 'SW-15', description: 'Other (Explain In Comments)' },
+          // BEAD
+          { location: 'BEAD', code: 'BD-1', description: 'Cut' },
+          { location: 'BEAD', code: 'BD-2', description: 'Mount/Dismount Damage' },
+          { location: 'BEAD', code: 'BD-3', description: 'Bent Bead' },
+          { location: 'BEAD', code: 'BD-4', description: 'Burned Bead' },
+          { location: 'BEAD', code: 'BD-5', description: 'Ozone Cracking' },
+          { location: 'BEAD', code: 'BD-6', description: 'Bead Crease' },
+          { location: 'BEAD', code: 'BD-7', description: 'Chafer Edge Separation' },
+          { location: 'BEAD', code: 'BD-8', description: 'Impact Chafer Edge Sep.' },
+          { location: 'BEAD', code: 'BD-9', description: 'Chafer Separation' },
+          { location: 'BEAD', code: 'BD-10', description: 'Ply Turn-Up Separation' },
+          { location: 'BEAD', code: 'BD-11', description: 'Bead Burst' },
+          { location: 'BEAD', code: 'BD-12', description: 'Other (Explain In Comments)' },
+          // INTERIOR
+          { location: 'INTERIOR', code: 'IN-1', description: 'Cut' },
+          { location: 'INTERIOR', code: 'IN-2', description: 'Cracks' },
+          { location: 'INTERIOR', code: 'IN-3', description: 'Blister/Bubble' },
+          { location: 'INTERIOR', code: 'IN-4', description: 'Open Splice' },
+          { location: 'INTERIOR', code: 'IN-5', description: 'Damaged (Foreign Object)' },
+          { location: 'INTERIOR', code: 'IN-6', description: 'Chafer Edge Separation' },
+          { location: 'INTERIOR', code: 'IN-7', description: 'Separation (From Innerliner)' },
+          { location: 'INTERIOR', code: 'IN-8', description: 'Separation (From Casing)' },
+          { location: 'INTERIOR', code: 'IN-9', description: 'Other (Explain In Comments)' },
+          // GENERAL
+          { location: 'GENERAL', code: 'GN-1', description: 'Improper Repair' },
+          { location: 'GENERAL', code: 'GN-2', description: 'Failure At Repair' },
+          { location: 'GENERAL', code: 'GN-3', description: 'Repairs Too Close' },
+          { location: 'GENERAL', code: 'GN-4', description: 'Missed Strive/Nail Hole (Retread)' },
+          { location: 'GENERAL', code: 'GN-5', description: 'Bond Line Failure (Retread)' },
+          { location: 'GENERAL', code: 'GN-6', description: 'Improper Buff' },
+          { location: 'GENERAL', code: 'GN-7', description: 'Branding Damage' },
+          { location: 'GENERAL', code: 'GN-8', description: 'Petroleum/Chemical Damage' },
+          { location: 'GENERAL', code: 'GN-9', description: 'Vehicle Damage' },
+          { location: 'GENERAL', code: 'GN-10', description: 'Dynamometer Damage' },
+          { location: 'GENERAL', code: 'GN-11', description: 'Foreign Material' },
+          { location: 'GENERAL', code: 'GN-12', description: 'Unknown' },
+          { location: 'GENERAL', code: 'GN-13', description: 'Customer Spec Not Met (Too Old)' },
+          { location: 'GENERAL', code: 'GN-14', description: 'Customer Spec Not Met (Too Many Repairs)' },
+          { location: 'GENERAL', code: 'GN-15', description: 'Customer Spec Not Met (Other)' },
+        ];
+
+        for (const damage of scrapDataRecords) {
+          await pool.query(
+            'INSERT INTO scrap_data (location, damage_code, damage_description) VALUES ($1, $2, $3)',
+            [damage.location, damage.code, damage.description]
+          );
+        }
+        console.log(`[DB] Seeded ${scrapDataRecords.length} scrap data records`);
+      }
+
+      // Seed tyres table if empty
+      const checkTyres = await pool.query('SELECT COUNT(*) as count FROM tyres');
+      console.log('[DB] Tyres count:', checkTyres.rows[0].count);
+      if (checkTyres.rows[0].count == 0 || checkTyres.rows[0].count === '0') {
+        console.log('[DB] Seeding tyres table...');
+        const tyresRecords = [
+          { brand: 'Michelin', pattern: 'X Multi HDD', 'Ply Rating': '18PR', 'Original Tread Depth': '22.5', 'Load Rating': '156/150', 'Load Rating Duals': '156', 'Load Rating Singles': '150', 'Speed Rating Duals': 'K', 'Speed Rating Singles': 'L', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '65', 'Rim Size': '22.5' },
+          { brand: 'Bridgestone', pattern: 'M840', 'Ply Rating': '16PR', 'Original Tread Depth': '16.5', 'Load Rating': '150/145', 'Load Rating Duals': '150', 'Load Rating Singles': '145', 'Speed Rating Duals': 'J', 'Speed Rating Singles': 'K', 'Tube Rating': 'TL', 'Nominal Section Width': '295', 'Aspect Ratio': '80', 'Rim Size': '22.5' },
+          { brand: 'Continental', pattern: 'HS3', 'Ply Rating': '20PR', 'Original Tread Depth': '15.5', 'Load Rating': '160/150', 'Load Rating Duals': '160', 'Load Rating Singles': '150', 'Speed Rating Duals': 'L', 'Speed Rating Singles': 'M', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '70', 'Rim Size': '22.5' },
+          { brand: 'Sumitomo', pattern: 'ST909', 'Ply Rating': '18PR', 'Original Tread Depth': '17', 'Load Rating': '154/150', 'Load Rating Duals': '154', 'Load Rating Singles': '150', 'Speed Rating Duals': 'K', 'Speed Rating Singles': 'L', 'Tube Rating': 'TL', 'Nominal Section Width': '315', 'Aspect Ratio': '80', 'Rim Size': '22.5' },
+          { brand: 'Goodyear', pattern: 'KMAX S', 'Ply Rating': '16PR', 'Original Tread Depth': '17', 'Load Rating': '148/145', 'Load Rating Duals': '148', 'Load Rating Singles': '145', 'Speed Rating Duals': 'J', 'Speed Rating Singles': 'K', 'Tube Rating': 'TL', 'Nominal Section Width': '295', 'Aspect Ratio': '75', 'Rim Size': '22.5' }
+        ];
+
+        for (const tyre of tyresRecords) {
+          await pool.query(
+            'INSERT INTO tyres (brand, pattern, "Ply Rating", "Original Tread Depth", "Load Rating", "Load Rating Duals", "Load Rating Singles", "Speed Rating Duals", "Speed Rating Singles", "Tube Rating", "Nominal Section Width", "Aspect Ratio", "Rim Size") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
+            [tyre.brand, tyre.pattern, tyre['Ply Rating'], tyre['Original Tread Depth'], tyre['Load Rating'], tyre['Load Rating Duals'], tyre['Load Rating Singles'], tyre['Speed Rating Duals'], tyre['Speed Rating Singles'], tyre['Tube Rating'], tyre['Nominal Section Width'], tyre['Aspect Ratio'], tyre['Rim Size']]
+          );
+        }
+        console.log(`[DB] Seeded ${tyresRecords.length} tyre records`);
+      }
     }
+
+    console.log('[DB] Migrations completed successfully');
   } catch (err) {
     console.error('[DB] Migration failed:', err.message);
     console.error(err.stack);
@@ -623,7 +1727,7 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: 'Strict',
+    sameSite: process.env.NODE_ENV === 'production' ? 'Strict' : 'Lax',
     maxAge: 1000 * 60 * 60 * 24
   }
 }));
@@ -1254,6 +2358,65 @@ app.post('/logout', async (req, res) => {
   }
   
   req.session.destroy(() => res.json({ message: 'Logged out' }));
+});
+
+// Developer-only login for monolithic server entry (mirror of src/dev-login)
+app.post('/api/auth/dev-login', async (req, res) => {
+  if (!isDeveloperMode) return res.status(403).json({ error: 'Developer mode not enabled' });
+
+  const { username = 'developer', role = 'Administrator' } = req.body || {};
+
+  try {
+    let user = null;
+
+    // Try Postgres pool
+    if (pool && typeof pool.query === 'function') {
+      const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+      user = result.rows[0];
+      if (!user) {
+        const password_hash = await bcrypt.hash('developer', 10);
+        const insert = await pool.query('INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING *', [username, password_hash, role]);
+        user = insert.rows[0];
+      }
+    } else if (db && typeof db.get === 'function') {
+      // SQLite
+      user = await new Promise((resolve, reject) => {
+        db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
+          if (err) return reject(err);
+          resolve(row);
+        });
+      });
+      if (!user) {
+        const password_hash = await bcrypt.hash('developer', 10);
+        const lastId = await new Promise((resolve, reject) => {
+          db.run('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)', [username, password_hash, role], function (err) {
+            if (err) return reject(err);
+            resolve(this.lastID);
+          });
+        });
+        user = await new Promise((resolve, reject) => {
+          db.get('SELECT * FROM users WHERE id = ?', [lastId], (err, row) => {
+            if (err) return reject(err);
+            resolve(row);
+          });
+        });
+      }
+    }
+
+    if (!user) {
+      // Fallback to in-memory session user
+      req.session.user = { id: 0, username, role };
+      await logActivity(req, { activityType: 'DEV_LOGIN_SESSION_CREATED', activityDescription: `Created in-memory developer session for ${username}` });
+      return res.json({ message: 'Developer logged in (in-memory session)', user: req.session.user });
+    }
+
+    req.session.user = { id: user.id, username: user.username, role: user.role };
+    await logActivity(req, { userId: user.id, username: user.username, activityType: 'DEV_LOGIN', activityDescription: `Developer login mapped to DB user ${user.username}` });
+    return res.json({ message: 'Developer logged in', user: req.session.user });
+  } catch (err) {
+    console.error('[DEV_LOGIN] Error during developer login:', err.message);
+    return res.status(500).json({ error: 'Developer login failed', details: err.message });
+  }
 });
 
 // Table utilities
@@ -2495,34 +3658,6 @@ app.delete('/api/vehicle-configs/:id', requireAdmin, async (req, res) => {
 });
 
 // ===== USER SUGGESTIONS API (Non-Admin Data Entry) =====
-// Create user_suggestions table if it doesn't exist
-async function createSuggestionsTable() {
-  try {
-    const createSuggestionsSql = `
-      CREATE TABLE IF NOT EXISTS "user_suggestions" (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        username TEXT NOT NULL,
-        suggestion_type TEXT NOT NULL,
-        suggestion_data JSONB NOT NULL,
-        status TEXT DEFAULT 'pending',
-        admin_reviewed_by TEXT,
-        admin_reviewed_at TIMESTAMP WITH TIME ZONE,
-        admin_notes TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_suggestions_status ON user_suggestions(status);
-      CREATE INDEX IF NOT EXISTS idx_suggestions_user_id ON user_suggestions(user_id);
-      CREATE INDEX IF NOT EXISTS idx_suggestions_type ON user_suggestions(suggestion_type);
-    `;
-    await pool.query(createSuggestionsSql);
-    console.log('[DB] user_suggestions table ready');
-  } catch (err) {
-    console.error('[DB] Error creating suggestions table:', err.message);
-  }
-}
-createSuggestionsTable();
 
 // Submit a new suggestion (any logged-in user)
 app.post('/api/suggestions', requireLogin, async (req, res) => {
@@ -2549,9 +3684,9 @@ app.post('/api/suggestions', requireLogin, async (req, res) => {
       return res.status(400).json({ error: 'Suggestion data is required' });
     }
 
-    const result = await pool.query(
+    const result = await query(
       `INSERT INTO user_suggestions (user_id, username, suggestion_type, suggestion_data, status)
-       VALUES ($1, $2, $3, $4, 'pending')
+       VALUES (?, ?, ?, ?, 'pending')
        RETURNING *`,
       [user.id, user.username, suggestionType, JSON.stringify(suggestionData)]
     );
@@ -2609,7 +3744,7 @@ app.get('/api/suggestions', requireManagerOrAdmin, async (req, res) => {
 
     query += ' ORDER BY created_at DESC';
 
-    const result = await pool.query(query, params);
+    const result = await query(query, params);
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching suggestions:', err);
@@ -2794,7 +3929,16 @@ app.post('/api/suggestions/:id/reject', requireManagerOrAdmin, async (req, res) 
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Zuri backend running at http://localhost:${PORT}`);
+// ===== DEVELOPER MODE API =====
+// GET /api/developer-mode - Get developer mode status (for client-side feature gating)
+app.get('/api/developer-mode', (req, res) => {
+  res.json({
+    isDeveloperMode: isDeveloperMode,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Start server (bind 0.0.0.0 so local jobs/containers can reach it)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Zuri backend running at http://0.0.0.0:${PORT}`);
 });

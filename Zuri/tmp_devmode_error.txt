@@ -1,0 +1,11 @@
+﻿Invoke-RestMethod : Unable to connect to the remote server
+At line:1 char:164
++ ... 000'; try { Invoke-RestMethod -Uri "$uri/api/developer-mode" -Method 
+ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest 
+   :HttpWebRequest) [Invoke-RestMethod], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.Powe 
+   rShell.Commands.InvokeRestMethodCommand
+ 
+

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { login } from './api';
 
-export default function LoginPage({ onLogin }) {
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
+
+export default function LoginPage({ onLogin, isDeveloperMode }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -10,6 +12,9 @@ export default function LoginPage({ onLogin }) {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [resetMessage, setResetMessage] = useState('');
   const [theme, setTheme] = useState('light');
+  const [showDevForm, setShowDevForm] = useState(false);
+  const [devRole, setDevRole] = useState('Administrator');
+  const [devUsername, setDevUsername] = useState('developer');
 
   // Handle light/dark theme toggle
   useEffect(() => {
@@ -100,6 +105,78 @@ export default function LoginPage({ onLogin }) {
             <span className={`w-3 h-3 rounded-full ${getStatusColor()} mr-1`}></span>
             <span className="text-sm capitalize">{serverStatus}</span>
           </div>
+          {/* Developer login (visible only in developer mode) */}
+          {(isDeveloperMode || window.__ZURI_DEVELOPER_MODE) && (
+            <div className="mt-4 text-center">
+              <p className="text-sm text-yellow-700 mb-2">Developer mode is enabled.</p>
+              {!showDevForm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDevForm(true)}
+                  className="mt-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 py-2 px-4 rounded-lg font-semibold"
+                >
+                  Developer Login
+                </button>
+              ) : (
+                <div className="mt-2 p-3 bg-yellow-50 rounded">
+                  <div className="mb-2">
+                    <label className="text-xs block text-left text-yellow-800">Username</label>
+                    <input
+                      value={devUsername}
+                      onChange={(e) => setDevUsername(e.target.value)}
+                      className="w-full px-2 py-1 rounded border border-yellow-200"
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-xs block text-left text-yellow-800">Role</label>
+                    <select
+                      value={devRole}
+                      onChange={(e) => setDevRole(e.target.value)}
+                      className="w-full px-2 py-1 rounded border border-yellow-200"
+                    >
+                      <option>Administrator</option>
+                      <option>Group Manager</option>
+                      <option>Store Manager</option>
+                      <option>Employee</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowDevForm(false)}
+                      className="px-3 py-1 rounded bg-gray-100"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`${API_BASE}/api/auth/dev-login`, {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: devUsername || 'developer', role: devRole || 'Administrator' })
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            onLogin(data.user);
+                          } else {
+                            setError('Developer login failed');
+                          }
+                        } catch (err) {
+                          setError('Developer login error');
+                        }
+                      }}
+                      className="px-3 py-1 rounded bg-yellow-400 text-yellow-900 font-semibold"
+                    >
+                      Login as {devRole}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Theme toggle */}
           <button

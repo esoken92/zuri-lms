@@ -12,9 +12,12 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
 import { getCurrentUser, logout } from './api';
+import { isAdmin } from './utils/rolePermissions';
 import ResetPasswordPage from './ResetPasswordPage';
 import Header from './components/Header';
 import UserSettingsPanel from './components/UserSettingsPanel';
+
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -22,6 +25,7 @@ function App() {
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem('darkMode') === 'true';
   });
+  const [isDeveloperMode, setIsDeveloperMode] = useState(false);
 
   const toggleDarkMode = () => {
     const newMode = !isDark;
@@ -43,6 +47,23 @@ function App() {
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
+
+    // Fetch developer mode flag from backend so the UI can show dev-only features
+    fetch(`${API_BASE}/api/developer-mode`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.isDeveloperMode) {
+          setIsDeveloperMode(true);
+          window.__ZURI_DEVELOPER_MODE = true;
+        } else {
+          setIsDeveloperMode(false);
+          window.__ZURI_DEVELOPER_MODE = false;
+        }
+      })
+      .catch(() => {
+        setIsDeveloperMode(false);
+        window.__ZURI_DEVELOPER_MODE = false;
+      });
   }, []);
 
   useEffect(() => {
@@ -54,6 +75,12 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100">
+        {isDeveloperMode && (
+          <div className="bg-yellow-200 text-yellow-900 p-2 text-center font-medium">
+            Developer Mode Enabled
+          </div>
+        )}
+
         {user && (
           <Header
             user={user}
@@ -83,7 +110,12 @@ function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/scrap" element={<ScrapPage user={user} />} />
               <Route path="/report-page" element={<ReportPage />} />
-              <Route path="/admin" element={<AdminPanel />} />
+              {isAdmin(user) ? (
+                <Route path="/admin" element={<AdminPanel />} />
+              ) : (
+                // Non-admin users should not access the admin panel
+                <Route path="/admin" element={<Navigate to="/" />} />
+              )}
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               {user.role === 'Administrator' && (
                 <Route
@@ -96,7 +128,7 @@ function App() {
             </>
           ) : (
             <>
-              <Route path="/login" element={<LoginPage onLogin={setUser} />} />
+              <Route path="/login" element={<LoginPage onLogin={setUser} isDeveloperMode={isDeveloperMode} />} />
               <Route path="*" element={<Navigate to="/login" />} />
             </>
           )}

@@ -1,0 +1,11 @@
+﻿Invoke-RestMethod : Unable to connect to the remote server
+At line:1 char:188
++ ... y { $post = Invoke-RestMethod -Uri "$uri/api/auth/dev-login" -Method 
+ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Invoke-RestMethod], WebEx 
+   ception
+    + FullyQualifiedErrorId : System.Net.WebException,Microsoft.PowerShell 
+   .Commands.InvokeRestMethodCommand
+ 
+

@@ -1,0 +1,19 @@
+﻿Invoke-RestMethod : 
+
+
+
+Error
+
+
+Cannot GET /api/me
+
+
+
+At line:1 char:828
++ ... try { $me = Invoke-RestMethod -Uri "$uri/api/me" -Method Get 
+-WebSess ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest 
+   :HttpWebRequest) [Invoke-RestMethod], WebException
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.Powe 
+   rShell.Commands.InvokeRestMethodCommand

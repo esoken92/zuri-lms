@@ -1,6 +1,7 @@
 // Zuri/client/src/components/Header.js
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { isAdmin } from '../utils/rolePermissions';
 
 export default function Header({ user, onLogout, toggleDarkMode, isDark }) {
   const location = useLocation();
@@ -11,7 +12,7 @@ export default function Header({ user, onLogout, toggleDarkMode, isDark }) {
     { label: 'Inspections', path: '/inspections' },
     { label: 'Reports', path: '/reports' },
     { label: 'Scrap', path: '/scrap' },
-    ...(user?.role === 'Administrator' ? [{ label: 'Admin', path: '/admin-dashboard' }] : []),
+    ...(isAdmin(user) ? [{ label: 'Admin', path: '/admin-dashboard' }] : []),
   ];
 
   const fallback = '/default-avatar.png'; // Replace this with your actual placeholder image or keep it empty
