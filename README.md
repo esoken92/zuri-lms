@@ -88,37 +88,64 @@ Zuri/
 
 ## 🚀 Quick Setup
 
-### Backend
+### Prerequisites
+- Node.js 18+ ([Download](https://nodejs.org/))
+- PostgreSQL 12+ ([Download](https://www.postgresql.org/download/))
+- Git ([Download](https://git-scm.com/))
+
+### Backend Setup
 ```bash
 cd Zuri/server
 npm install
-npm start
+
+# Copy environment file and configure
+cp .env.example .env
+# Edit .env with your database credentials
+
+# Seed development data (optional)
+npm run seed:dev
+
+# Start server
+npm run dev  # Development mode with auto-restart
+# or
+npm start    # Production mode
 ```
 
 Server runs at: `http://localhost:5000`
 
-For detailed configuration and API documentation, see [server/README.md](./Zuri/server/README.md)
-
-### Frontend
+### Frontend Setup
 ```bash
 cd Zuri/client
 npm install
+
+# Copy environment file
+cp .env.example .env
+
+# Start development server
 npm start
 ```
 
 Client runs at: `http://localhost:3000`
 
-### Database
-PostgreSQL must be running on `localhost:54321` (configurable via environment variables)
+### Database Setup
+1. Create PostgreSQL database: `zuri_lms`
+2. Update `.env` files with your database credentials
+3. Tables are created automatically on first run
 
-```bash
-# Test connection
-psql -h localhost -p 54321 -U postgres -d zuri
-```
+### Development Accounts
+After running `npm run seed:dev`, use these test accounts:
+- **admin** / admin123 (Administrator)
+- **inspector** / inspect123 (Inspector)
+- **manager** / manage123 (Group Manager)
 
 ---
 
-## 📖 Documentation Files
+## 📚 Documentation
+
+- **[API Documentation](./Zuri/server/docs/api.md)** - Complete API reference
+- **[Server Guide](./Zuri/server/README.md)** - Backend setup and configuration
+- **[Logging System](./Zuri/server/LOGGING.md)** - Activity logging details
+- **[Testing Guide](./Zuri/server/VERIFICATION_TESTING.md)** - Testing procedures
 
 - **[server/README.md](./Zuri/server/README.md)** - Backend setup, API endpoints, configuration
 - **[server/LOGGING.md](./Zuri/server/LOGGING.md)** - Logging system architecture and usage
