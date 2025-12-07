@@ -16,6 +16,7 @@ import { isAdmin } from './utils/rolePermissions';
 import ResetPasswordPage from './ResetPasswordPage';
 import Header from './components/Header';
 import UserSettingsPanel from './components/UserSettingsPanel';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
 
@@ -138,4 +139,10 @@ function App() {
   );
 }
 
-export default App;
+export default function AppWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}

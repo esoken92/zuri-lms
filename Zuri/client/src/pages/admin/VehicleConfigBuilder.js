@@ -3,8 +3,6 @@ import axios from 'axios';
 
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-const TIRE_TYPES = ['steer', 'drive', 'differential', 'single', 'trailer', 'roll', 'spare'];
-
 function VehicleConfigBuilder() {
   const [configs, setConfigs] = useState([]);
   const [editing, setEditing] = useState(null);

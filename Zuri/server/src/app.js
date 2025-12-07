@@ -5,11 +5,10 @@ const path = require('path');
 const fs = require('fs');
 
 // Import configuration
-const config = require('./config/database');
 const { pool } = require('./config/database');
 
 // Import middleware
-const { requireLogin, requireAdmin, requireRole, requireManagerOrAdmin } = require('./middleware/auth');
+const { requireLogin } = require('./middleware/auth');
 const { errorHandler } = require('./middleware/errorHandler');
 const upload = require('./middleware/upload');
 
@@ -30,9 +29,14 @@ const tableRoutes = require('./routes/table');
 
 // Import utilities
 const { logActivity } = require('./utils/activityLogger');
-const { getClientIp, parseUserAgent } = require('./utils/clientInfo');
+const { validateEnvironment, ensureDirectories } = require('./config/env');
 
 const app = express();
+
+// Validate environment variables and create necessary directories
+validateEnvironment();
+ensureDirectories();
+
 const PORT = process.env.PORT || 5000;
 
 // Trust proxy for IP detection

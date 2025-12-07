@@ -4,7 +4,6 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import Papa from 'papaparse';
 import { saveAs } from 'file-saver';
-import SyncStatusBar from '../components/SyncStatusBar';
 
 const BASE_URL = process.env.REACT_APP_API_URL;
 

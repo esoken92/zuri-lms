@@ -170,7 +170,6 @@ export default function ScrapPage({ user }) {
       }
 
       const company = companies.find(c => c.id === parseInt(reportFormData.companyId));
-      const depot = depots.find(d => d.id === parseInt(reportFormData.depotId));
 
       const reportData = {
         companyId: reportFormData.companyId,

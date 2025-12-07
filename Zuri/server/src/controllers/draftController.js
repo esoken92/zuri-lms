@@ -1,6 +1,4 @@
 const { pool } = require('../config/database');
-const { logActivity } = require('../utils/activityLogger');
-const { getClientIp } = require('../utils/clientInfo');
 
 // Create new inspection draft
 const createInspectionDraft = async (req, res) => {

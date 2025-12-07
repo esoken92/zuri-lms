@@ -1,6 +1,4 @@
 const { pool } = require('../config/database');
-const { logActivity } = require('../utils/activityLogger');
-const { getClientIp } = require('../utils/clientInfo');
 const { ensureTable, normalize } = require('../utils/databaseInit');
 
 // Get all scraps for authenticated user

@@ -1,6 +1,3 @@
-const { logActivity } = require('../utils/activityLogger');
-const { getClientIp, parseUserAgent } = require('../utils/clientInfo');
-
 // Authentication middleware
 const requireLogin = (req, res, next) => {
   console.log('[AUTH] requireLogin check - session:', !!req.session, 'user:', !!req.session?.user, 'path:', req.path);

@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import Toast from '../Toast';
 import DataSuggestionModal from '../DataSuggestionModal';
-import { useRBAC } from '../../hooks/useRBAC';
 import InspectionHeader from './InspectionHeader';
 import VehicleCard from './VehicleCard';
 import Breadcrumb from './Breadcrumb';

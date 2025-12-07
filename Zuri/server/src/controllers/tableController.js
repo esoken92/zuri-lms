@@ -1,7 +1,5 @@
 const { pool } = require('../config/database');
 const { Parser } = require('json2csv');
-const { logActivity } = require('../utils/activityLogger');
-const { getClientIp } = require('../utils/clientInfo');
 
 // Whitelist of allowed tables for dynamic access (security: prevent access to system tables)
 const ALLOWED_DYNAMIC_TABLES = ['scraps', 'inspections', 'companies', 'depots', 'vehicle_configs', 'tyres', 'vehicles'];

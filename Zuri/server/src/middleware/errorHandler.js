@@ -1,8 +1,7 @@
 const { logActivity } = require('../utils/activityLogger');
 
 // Centralized error handler
-const errorHandler = (err, req, res, next) => {
-  const time = new Date().toISOString();
+const errorHandler = (err, req, res, next) => { // eslint-disable-line no-unused-vars
   const logMsg = `[ERROR] ${req.method} ${req.originalUrl} - ${err.message}`;
   console.error(`${logMsg}`);
   console.error(err.stack);

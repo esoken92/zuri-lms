@@ -180,16 +180,3 @@ export function getFeatureFlags(user) {
     canManageTeamData: hasPermission(user, PERMISSIONS.MANAGE_TEAM_DATA),
   };
 }
-
-export default {
-  ROLES,
-  PERMISSIONS,
-  rolePermissions,
-  hasPermission,
-  hasAnyPermission,
-  hasAllPermissions,
-  isAdmin,
-  isAdminOrManager,
-  isManager,
-  getFeatureFlags,
-};

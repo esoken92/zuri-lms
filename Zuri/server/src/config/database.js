@@ -39,12 +39,12 @@ if (!isProduction) {
 
   const pool = new Pool(dbConfig);
 
-  pool.on('error', (err, client) => {
+  pool.on('error', (err) => {
     console.error('[DB] Unexpected error on idle client:', err);
     process.exit(-1);
   });
 
-  pool.on('connect', (client) => {
+  pool.on('connect', () => {
     console.log('[DB] New client connected to PostgreSQL database');
   });
 
