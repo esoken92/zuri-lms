@@ -138,7 +138,20 @@ const logout = async (req, res) => {
 
 // Developer-only login: map to a real DB user when possible (Postgres pool or SQLite db).
 const devLogin = async (req, res) => {
-  const { username = 'developer', role = 'Administrator' } = req.body || {};
+  console.log('[DEV_LOGIN] Function called');
+  console.log('[DEV_LOGIN] Raw req.body:', JSON.stringify(req.body));
+  console.log('[DEV_LOGIN] req.body type:', typeof req.body);
+  console.log('[DEV_LOGIN] req.body keys:', req.body ? Object.keys(req.body) : 'null');
+
+  let username = 'developer';
+  let role = 'Administrator';
+
+  if (req.body && typeof req.body === 'object') {
+    username = req.body.username || username;
+    role = req.body.role || role;
+  }
+
+  console.log(`[DEV_LOGIN] Final: username=${username}, role=${role}`);
 
   try {
     let user = null;
@@ -147,6 +160,7 @@ const devLogin = async (req, res) => {
     if (pool && typeof pool.query === 'function') {
       const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
       user = rows[0];
+      console.log(`[DEV_LOGIN] Found user in Postgres:`, user);
 
       if (!user) {
         const password_hash = await bcrypt.hash('developer', 10);
@@ -155,6 +169,12 @@ const devLogin = async (req, res) => {
           [username, password_hash, role]
         );
         user = insert.rows[0];
+        console.log(`[DEV_LOGIN] Created new user:`, user);
+      } else if (user.role !== role) {
+        // Update the user's role if different from requested
+        await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, user.id]);
+        user.role = role;
+        console.log(`[DEV_LOGIN] Updated user role to:`, role);
       }
     } else if (db && typeof db.get === 'function') {
       // SQLite path
@@ -184,6 +204,15 @@ const devLogin = async (req, res) => {
             resolve(row);
           });
         });
+      } else if (user.role !== role) {
+        // Update the user's role if different from requested
+        await new Promise((resolve, reject) => {
+          db.run('UPDATE users SET role = ? WHERE id = ?', [role, user.id], function(err) {
+            if (err) return reject(err);
+            resolve();
+          });
+        });
+        user.role = role;
       }
     }
 
@@ -192,19 +221,20 @@ const devLogin = async (req, res) => {
       req.session.user = { id: 0, username, role };
       await logActivity(req, {
         activityType: 'DEV_LOGIN_SESSION_CREATED',
-        activityDescription: `Created in-memory developer session for ${username}`
+        activityDescription: `Created in-memory developer session for ${username} as ${role}`
       });
       return res.json({ message: 'Developer logged in (in-memory session)', user: req.session.user });
     }
 
-    // Map session to DB user
-    req.session.user = { id: user.id, username: user.username, role: user.role };
+    // Map session to DB user but use the requested role for testing different user types
+    req.session.user = { id: user.id, username: user.username, role: role };
+    console.log(`[DEV_LOGIN] Session user set to:`, req.session.user);
 
     await logActivity(req, {
       userId: user.id,
       username: user.username,
       activityType: 'DEV_LOGIN',
-      activityDescription: `Developer login mapped to DB user ${user.username}`
+      activityDescription: `Developer login as ${role} using DB user ${user.username}`
     });
 
     return res.json({ message: 'Developer logged in', user: req.session.user });

@@ -1,3 +1,6 @@
+// Load environment variables
+require('dotenv').config();
+
 const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
@@ -78,6 +81,8 @@ app.use((req, res, next) => {
 
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Serve built client
+app.use(express.static(path.join(__dirname, '../../client/build')));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -155,6 +160,11 @@ app.get('/export/:key', requireLogin, require('./controllers/tableController').e
 
 // Stats route
 app.get('/api/stats', requireLogin, require('./controllers/statsController').getStats);
+
+// Catch-all handler: send back index.html for client-side routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../client/build/index.html'));
+});
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
