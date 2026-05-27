@@ -4,7 +4,7 @@ const dbConfig = {
   user: process.env.PGUSER || 'postgres',
   host: process.env.PGHOST || 'localhost',
   database: process.env.PGDATABASE || 'zuri',
-  password: process.env.PGPASSWORD || '1234',
+  password: process.env.PGPASSWORD,
   port: Number(process.env.PGPORT) || 54321,
 };
 
