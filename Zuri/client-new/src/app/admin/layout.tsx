@@ -40,6 +40,7 @@ export default function AdminLayout({
 
   const navItems = [
     { name: 'Admin Panel', href: '/admin', icon: '⚙️' },
+    { name: 'Data Import', href: '/admin/data-import', icon: '📥' },
     { name: 'Users', href: '/admin/users', icon: '👥' },
     { name: 'Companies', href: '/admin/companies', icon: '🏢' },
     { name: 'Depots', href: '/admin/depots', icon: '🏭' },

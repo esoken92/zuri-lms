@@ -3,35 +3,5 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": {
-      "description": "Supabase project URL",
-      "value": ""
-    },
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": {
-      "description": "Supabase anonymous key",
-      "value": ""
-    },
-    "SUPABASE_SERVICE_ROLE_KEY": {
-      "description": "Supabase service role key (server-side only)",
-      "value": ""
-    },
-    "NEXT_PUBLIC_APP_URL": {
-      "description": "Application URL",
-      "value": ""
-    },
-    "NEXT_PUBLIC_APP_NAME": {
-      "description": "Application name",
-      "value": "Zuri LMS"
-    },
-    "JWT_SECRET": {
-      "description": "JWT secret for authentication",
-      "value": ""
-    },
-    "SESSION_SECRET": {
-      "description": "Session secret for authentication",
-      "value": ""
-    }
-  }
+  "regions": ["iad1"]
 }
