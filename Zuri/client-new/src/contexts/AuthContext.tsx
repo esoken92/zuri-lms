@@ -9,7 +9,7 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: any }>
-  signUp: (email: string, password: string, username: string, role: string) => Promise<{ error: any }>
+  signUp: (email: string, password: string, username: string, role: string, profileData?: any) => Promise<{ error: any, user?: User }>
   signOut: () => Promise<void>
 }
 
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error }
   }
 
-  const signUp = async (email: string, password: string, username: string, role: string) => {
+  const signUp = async (email: string, password: string, username: string, role: string, profileData?: any) => {
     // First sign up with Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -59,14 +59,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Then create user record in our users table
     if (data.user) {
+      const userData: any = {
+        id: data.user.id,
+        username,
+        role,
+        email,
+      }
+
+      // Add extended profile data if provided
+      if (profileData) {
+        Object.assign(userData, profileData)
+      }
+
       const { error: userError } = await supabase
         .from('users')
-        .insert({
-          id: data.user.id,
-          username,
-          role,
-          email,
-        })
+        .insert(userData)
 
       if (userError) {
         // Rollback auth if user creation fails
@@ -75,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    return { error: null }
+    return { error: null, user: data?.user || undefined }
   }
 
   const signOut = async () => {
