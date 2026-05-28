@@ -67,12 +67,8 @@ export default function SettingsPage() {
 
   // Check if user has admin/management role
   const canManageData = () => {
-    const role = userData?.role
-    console.log('User role:', role, 'Type:', typeof role)
-    const normalizedRole = role?.toLowerCase()
-    const hasAccess = normalizedRole === 'admin' || normalizedRole === 'management' || normalizedRole === 'administrator'
-    console.log('Has access:', hasAccess)
-    return hasAccess
+    const role = userData?.role?.toLowerCase()
+    return role === 'admin' || role === 'management' || role === 'administrator'
   }
 
   // Load existing data for selected type
