@@ -86,6 +86,39 @@ export default function LoginPage() {
               Don't have an account? Register
             </a>
           </div>
+
+          {/* Demo Accounts Section */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <details className="text-left">
+              <summary className="text-sm font-medium text-gray-700 cursor-pointer hover:text-gray-900">
+                Demo Accounts (Click to expand)
+              </summary>
+              <div className="mt-3 space-y-2 text-xs bg-gray-50 p-3 rounded-md">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="font-semibold text-blue-600">Administrator:</span><br/>
+                    demoAdmin@lms.com<br/>
+                    DemoAdmin123
+                  </div>
+                  <div>
+                    <span className="font-semibold text-green-600">Management:</span><br/>
+                    demoManager@lms.com<br/>
+                    DemoManager123
+                  </div>
+                  <div>
+                    <span className="font-semibold text-purple-600">Inspector:</span><br/>
+                    demoInspector@lms.com<br/>
+                    DemoInspector123
+                  </div>
+                  <div>
+                    <span className="font-semibold text-orange-600">User:</span><br/>
+                    demoUser@lms.com<br/>
+                    DemoUser123
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
         </form>
       </div>
     </div>
