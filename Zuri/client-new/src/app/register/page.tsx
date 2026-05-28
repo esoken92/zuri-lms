@@ -24,7 +24,6 @@ export default function RegisterPage() {
   const [securityAnswer1, setSecurityAnswer1] = useState('')
   const [securityQuestion2, setSecurityQuestion2] = useState('')
   const [securityAnswer2, setSecurityAnswer2] = useState('')
-  const [role, setRole] = useState('inspector')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -90,7 +89,7 @@ export default function RegisterPage() {
       security_answer_2: securityAnswer2
     }
 
-    const { error, requiresApproval } = await signUp(email, password, username, role, profileData)
+    const { error, requiresApproval } = await signUp(email, password, username, 'inspector', profileData)
 
     if (error) {
       setError(error.message)
@@ -331,23 +330,12 @@ export default function RegisterPage() {
                 type="password"
                 autoComplete="new-password"
                 required
+                minLength={12}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
               />
-            </div>
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700">Role *</label>
-              <select
-                id="role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-              >
-                <option value="inspector">Inspector</option>
-                <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
-              </select>
+              <p className="mt-1 text-xs text-gray-500">Password must be at least 12 characters</p>
             </div>
           </div>
 

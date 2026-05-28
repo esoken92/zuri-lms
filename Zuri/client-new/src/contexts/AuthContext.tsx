@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { hashString } from '@/lib/crypto'
 
 interface AuthContextType {
   user: User | null
@@ -94,9 +95,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         approval_status: 'pending', // Require admin approval
       }
 
-      // Add extended profile data if provided
+      // Add extended profile data if provided with validation
       if (profileData) {
-        Object.assign(userData, profileData)
+        // Whitelist allowed fields to prevent injection
+        const allowedFields = [
+          'first_name', 'last_name', 'phone', 'dialling_code',
+          'country_id', 'province_id', 'region_id', 'store_id', 'branch',
+          'security_question_1', 'security_answer_1',
+          'security_question_2', 'security_answer_2'
+        ]
+        
+        for (const field of allowedFields) {
+          if (profileData[field] !== undefined) {
+            // Hash security answers before storage
+            if (field === 'security_answer_1' || field === 'security_answer_2') {
+              userData[field] = await hashString(profileData[field])
+            } else {
+              userData[field] = profileData[field]
+            }
+          }
+        }
       }
 
       const { error: userError } = await supabase
