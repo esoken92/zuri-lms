@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { syncData } from '@/lib/offlineSync'
 
 type ConnectionStatus = 'online' | 'offline' | 'slow'
@@ -13,6 +13,7 @@ interface ConnectionContextType {
   clearSyncQueue: () => void
   syncNow: () => Promise<void>
   isSyncing: boolean
+  lastSynced: string | null
 }
 
 const ConnectionContext = createContext<ConnectionContextType | undefined>(undefined)
@@ -22,6 +23,7 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
   const [isOnline, setIsOnline] = useState(true)
   const [syncQueue, setSyncQueue] = useState<any[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
+  const [lastSynced, setLastSynced] = useState<string | null>(null)
 
   useEffect(() => {
     // Check initial online status
@@ -70,11 +72,15 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
     }
   }, [isOnline])
 
-  // Load sync queue from localStorage on mount
+  // Load sync queue and lastSynced from localStorage on mount
   useEffect(() => {
     const savedQueue = localStorage.getItem('syncQueue')
     if (savedQueue) {
       setSyncQueue(JSON.parse(savedQueue))
+    }
+    const savedLastSynced = localStorage.getItem('lastSynced')
+    if (savedLastSynced) {
+      setLastSynced(savedLastSynced)
     }
   }, [])
 
@@ -82,6 +88,26 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     localStorage.setItem('syncQueue', JSON.stringify(syncQueue))
   }, [syncQueue])
+
+  // Save lastSynced to localStorage whenever it changes
+  useEffect(() => {
+    if (lastSynced) {
+      localStorage.setItem('lastSynced', lastSynced)
+    }
+  }, [lastSynced])
+
+  // Auto-sync every 60 seconds when online
+  useEffect(() => {
+    if (!isOnline) return
+
+    const autoSyncInterval = setInterval(async () => {
+      if (syncQueue.length > 0 && !isSyncing) {
+        await syncNow()
+      }
+    }, 60000) // Sync every 60 seconds
+
+    return () => clearInterval(autoSyncInterval)
+  }, [isOnline, syncQueue.length, isSyncing])
 
   const syncNow = async () => {
     if (!isOnline || isSyncing || syncQueue.length === 0) return
@@ -91,6 +117,7 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
       const result = await syncData()
       if (result.success) {
         setSyncQueue([])
+        setLastSynced(new Date().toISOString())
       } else {
         // Update queue with remaining items
         const remainingQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]')
@@ -112,7 +139,7 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <ConnectionContext.Provider value={{ status, isOnline, syncQueue, addToSyncQueue, clearSyncQueue, syncNow, isSyncing }}>
+    <ConnectionContext.Provider value={{ status, isOnline, syncQueue, addToSyncQueue, clearSyncQueue, syncNow, isSyncing, lastSynced }}>
       {children}
     </ConnectionContext.Provider>
   )

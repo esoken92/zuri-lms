@@ -3,7 +3,7 @@
 import { useConnection } from '@/contexts/ConnectionContext'
 
 export default function ConnectionStatus() {
-  const { status, syncQueue, syncNow, isSyncing } = useConnection()
+  const { status, syncQueue, syncNow, isSyncing, lastSynced } = useConnection()
 
   const getStatusColor = () => {
     switch (status) {
@@ -22,8 +22,22 @@ export default function ConnectionStatus() {
     await syncNow()
   }
 
+  const formatLastSynced = () => {
+    if (!lastSynced) return null
+    const date = new Date(lastSynced)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours}h ago`
+    return date.toLocaleDateString()
+  }
+
   return (
-    <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
+    <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
       <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-md border border-gray-200">
         <div className={`w-3 h-3 rounded-full ${getStatusColor()} animate-pulse`} />
         {syncQueue.length > 0 && (
@@ -40,6 +54,11 @@ export default function ConnectionStatus() {
               {isSyncing ? '...' : 'Sync'}
             </button>
           </>
+        )}
+        {lastSynced && syncQueue.length === 0 && (
+          <span className="text-xs text-gray-500" title={`Last synced: ${new Date(lastSynced).toLocaleString()}`}>
+            {formatLastSynced()}
+          </span>
         )}
       </div>
     </div>
