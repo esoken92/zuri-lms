@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ConnectionProvider } from "@/contexts/ConnectionContext";
 import { BluetoothProvider } from "@/contexts/BluetoothContext";
 import ConnectionStatus from "@/components/ConnectionStatus";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,6 +39,7 @@ export default function RootLayout({
             <AuthProvider>{children}</AuthProvider>
           </BluetoothProvider>
         </ConnectionProvider>
+        <Analytics />
       </body>
     </html>
   );
