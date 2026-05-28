@@ -49,8 +49,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) return { error }
 
-    // Temporarily skip approval check due to database schema issues
-    // Will re-enable once database is properly configured
+    // Check if user is approved - handle database errors gracefully
+    if (data.user) {
+      try {
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('approval_status')
+          .eq('id', data.user.id)
+          .single()
+
+        if (userError) {
+          console.warn('User table query failed:', userError.message)
+          // Allow sign-in if database query fails
+          return { error: null }
+        }
+
+        if (userData && userData.approval_status !== 'approved') {
+          await supabase.auth.signOut()
+          return { 
+            error: new Error(userData.approval_status === 'pending' 
+              ? 'Your account is pending approval. Please wait for an administrator to approve your account.' 
+              : 'Your account has been rejected. Please contact an administrator.'),
+            requiresApproval: true
+          }
+        }
+      } catch (err) {
+        console.error('Error checking approval status:', err)
+        // Allow sign-in if check fails
+        return { error: null }
+      }
+    }
+
     return { error: null }
   }
 
