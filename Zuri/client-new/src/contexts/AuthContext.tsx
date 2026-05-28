@@ -8,8 +8,8 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<{ error: any }>
-  signUp: (email: string, password: string, username: string, role: string, profileData?: any) => Promise<{ error: any, user?: User }>
+  signIn: (email: string, password: string) => Promise<{ error: any, requiresApproval?: boolean }>
+  signUp: (email: string, password: string, username: string, role: string, profileData?: any) => Promise<{ error: any, user?: User, requiresApproval?: boolean }>
   signOut: () => Promise<void>
 }
 
@@ -41,11 +41,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
-    return { error }
+
+    if (error) return { error }
+
+    // Check if user is approved
+    if (data.user) {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('approval_status')
+        .eq('id', data.user.id)
+        .single()
+
+      if (userError || !userData) {
+        await supabase.auth.signOut()
+        return { error: new Error('Failed to fetch user data') }
+      }
+
+      if (userData.approval_status !== 'approved') {
+        await supabase.auth.signOut()
+        return { 
+          error: new Error(userData.approval_status === 'pending' 
+            ? 'Your account is pending approval. Please wait for an administrator to approve your account.' 
+            : 'Your account has been rejected. Please contact an administrator.'),
+          requiresApproval: true
+        }
+      }
+    }
+
+    return { error: null }
   }
 
   const signUp = async (email: string, password: string, username: string, role: string, profileData?: any) => {
@@ -64,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         username,
         role,
         email,
+        approval_status: 'pending', // Require admin approval
       }
 
       // Add extended profile data if provided
@@ -82,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    return { error: null, user: data?.user || undefined }
+    return { error: null, user: data?.user || undefined, requiresApproval: true }
   }
 
   const signOut = async () => {

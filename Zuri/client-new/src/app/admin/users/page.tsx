@@ -29,6 +29,41 @@ export default function UsersPage() {
     setLoading(false)
   }
 
+  const approveUser = async (userId: string) => {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        approval_status: 'approved',
+        approved_by: (await supabase.auth.getUser()).data.user?.id,
+        approved_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+
+    if (error) {
+      alert('Failed to approve user: ' + error.message)
+    } else {
+      loadUsers()
+    }
+  }
+
+  const rejectUser = async (userId: string, reason: string) => {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        approval_status: 'rejected',
+        approved_by: (await supabase.auth.getUser()).data.user?.id,
+        approved_at: new Date().toISOString(),
+        rejection_reason: reason
+      })
+      .eq('id', userId)
+
+    if (error) {
+      alert('Failed to reject user: ' + error.message)
+    } else {
+      loadUsers()
+    }
+  }
+
   useEffect(() => {
     loadUsers()
   }, [])
@@ -63,9 +98,11 @@ export default function UsersPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Store</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -77,6 +114,17 @@ export default function UsersPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.username}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">{user.role}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      user.approval_status === 'approved' 
+                        ? 'bg-green-100 text-green-800' 
+                        : user.approval_status === 'rejected'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {user.approval_status || 'pending'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {user.countries?.name}
                   </td>
@@ -85,6 +133,27 @@ export default function UsersPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(user.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    {user.approval_status === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => approveUser(user.id)}
+                          className="text-green-600 hover:text-green-900"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => {
+                            const reason = prompt('Enter rejection reason:')
+                            if (reason) rejectUser(user.id, reason)
+                          }}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

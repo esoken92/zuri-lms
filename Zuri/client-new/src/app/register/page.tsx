@@ -90,13 +90,13 @@ export default function RegisterPage() {
       security_answer_2: securityAnswer2
     }
 
-    const { error } = await signUp(email, password, username, role, profileData)
+    const { error, requiresApproval } = await signUp(email, password, username, role, profileData)
 
     if (error) {
       setError(error.message)
       setLoading(false)
     } else {
-      router.push('/dashboard')
+      router.push('/pending-approval')
     }
   }
 

@@ -42,6 +42,7 @@ export default function AdminLayout({
     { name: 'Admin Panel', href: '/admin', icon: '⚙️' },
     { name: 'Data Import', href: '/admin/data-import', icon: '📥' },
     { name: 'Users', href: '/admin/users', icon: '👥' },
+    { name: 'Activity Logs', href: '/admin/activity-logs', icon: '📋' },
     { name: 'Companies', href: '/admin/companies', icon: '🏢' },
     { name: 'Depots', href: '/admin/depots', icon: '🏭' },
     { name: 'Vehicle Configs', href: '/admin/vehicle-configs', icon: '🚛' },
