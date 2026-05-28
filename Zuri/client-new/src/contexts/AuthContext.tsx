@@ -49,8 +49,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) return { error }
 
-    // Skip approval check for now to allow sign-in
-    // The approval system can be re-enabled once RLS policies are properly configured
+    // Check if user is approved - query public.users table explicitly
+    if (data.user) {
+      try {
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('approval_status')
+          .eq('id', data.user.id)
+          .single()
+
+        if (userError) {
+          console.warn('User table query failed:', userError.message)
+          // Allow sign-in if user record doesn't exist yet (new auth user)
+          return { error: null }
+        }
+
+        if (userData && userData.approval_status !== 'approved') {
+          await supabase.auth.signOut()
+          return { 
+            error: new Error(userData.approval_status === 'pending' 
+              ? 'Your account is pending approval. Please wait for an administrator to approve your account.' 
+              : 'Your account has been rejected. Please contact an administrator.'),
+            requiresApproval: true
+          }
+        }
+      } catch (err) {
+        console.error('Error checking approval status:', err)
+        return { error: null }
+      }
+    }
+
     return { error: null }
   }
 
