@@ -1,14 +1,14 @@
 -- Seed Geographic Data
 
 -- Regions
-INSERT INTO regions (name, description) VALUES
-('Global', 'Worldwide operations'),
-('Africa', 'African continent operations'),
-('SADC', 'Southern African Development Community'),
-('Europe', 'European operations'),
-('Asia', 'Asian operations'),
-('Americas', 'North and South American operations')
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO regions (name, code, description) VALUES
+('Global', 'GLB', 'Worldwide operations'),
+('Africa', 'AFR', 'African continent operations'),
+('SADC', 'SADC', 'Southern African Development Community'),
+('Europe', 'EUR', 'European operations'),
+('Asia', 'ASI', 'Asian operations'),
+('Americas', 'AME', 'North and South American operations')
+ON CONFLICT DO NOTHING;
 
 -- Countries (SADC prioritized, then major countries)
 INSERT INTO countries (name, code, dialling_code, is_sadc, priority) VALUES
@@ -44,7 +44,7 @@ INSERT INTO countries (name, code, dialling_code, is_sadc, priority) VALUES
 ('Egypt', 'EG', '+20', FALSE, 28),
 ('Mexico', 'MX', '+52', FALSE, 29),
 ('Indonesia', 'ID', '+62', FALSE, 30)
-ON CONFLICT (code) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- South Africa Provinces
 INSERT INTO provinces (name, country_id, code) VALUES
@@ -57,7 +57,7 @@ INSERT INTO provinces (name, country_id, code) VALUES
 ('North West', (SELECT id FROM countries WHERE code = 'ZA'), 'NW'),
 ('Free State', (SELECT id FROM countries WHERE code = 'ZA'), 'FS'),
 ('Northern Cape', (SELECT id FROM countries WHERE code = 'ZA'), 'NC')
-ON CONFLICT (name, country_id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Botswana Districts
 INSERT INTO provinces (name, country_id, code) VALUES
@@ -70,7 +70,7 @@ INSERT INTO provinces (name, country_id, code) VALUES
 ('North East', (SELECT id FROM countries WHERE code = 'BW'), 'NE'),
 ('South East', (SELECT id FROM countries WHERE code = 'BW'), 'SE'),
 ('Southern', (SELECT id FROM countries WHERE code = 'BW'), 'SO')
-ON CONFLICT (name, country_id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Namibia Regions
 INSERT INTO provinces (name, country_id, code) VALUES
@@ -88,7 +88,7 @@ INSERT INTO provinces (name, country_id, code) VALUES
 ('Oshikoto', (SELECT id FROM countries WHERE code = 'NA'), 'OT'),
 ('Otjozondjupa', (SELECT id FROM countries WHERE code = 'NA'), 'OD'),
 ('Zambezi', (SELECT id FROM countries WHERE code = 'NA'), 'ZA')
-ON CONFLICT (name, country_id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Zimbabwe Provinces
 INSERT INTO provinces (name, country_id, code) VALUES
@@ -102,13 +102,13 @@ INSERT INTO provinces (name, country_id, code) VALUES
 ('Matabeleland North', (SELECT id FROM countries WHERE code = 'ZW'), 'MN'),
 ('Matabeleland South', (SELECT id FROM countries WHERE code = 'ZW'), 'MS'),
 ('Midlands', (SELECT id FROM countries WHERE code = 'ZW'), 'MI')
-ON CONFLICT (name, country_id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Default Stores
-INSERT INTO stores (name, branch_code, address, country_id, province_id, region_id, contact_person, phone, email) VALUES
-('Head Office', 'HO001', '123 Main Street, Johannesburg', (SELECT id FROM countries WHERE code = 'ZA'), (SELECT id FROM provinces WHERE code = 'GP'), (SELECT id FROM regions WHERE name = 'SADC'), 'John Smith', '+27111234567', 'headoffice@zuri.com'),
-('Cape Town Branch', 'CT001', '456 Long Street, Cape Town', (SELECT id FROM countries WHERE code = 'ZA'), (SELECT id FROM provinces WHERE code = 'WC'), (SELECT id FROM regions WHERE name = 'SADC'), 'Jane Doe', '+27219876543', 'capetown@zuri.com'),
-('Durban Branch', 'DBN001', '789 Beach Road, Durban', (SELECT id FROM countries WHERE code = 'ZA'), (SELECT id FROM provinces WHERE code = 'KZN'), (SELECT id FROM regions WHERE name = 'SADC'), 'Mike Johnson', '+27315556677', 'durban@zuri.com'),
-('Gaborone Branch', 'GB001', '321 Main Mall, Gaborone', (SELECT id FROM countries WHERE code = 'BW'), (SELECT id FROM provinces WHERE code = 'CE'), (SELECT id FROM regions WHERE name = 'SADC'), 'Sarah Williams', '+26731234567', 'gaborone@zuri.com'),
-('Windhoek Branch', 'WH001', '654 Independence Avenue, Windhoek', (SELECT id FROM countries WHERE code = 'NA'), (SELECT id FROM provinces WHERE code = 'KH'), (SELECT id FROM regions WHERE name = 'SADC'), 'David Brown', '+26461123456', 'windhoek@zuri.com')
-ON CONFLICT (branch_code) DO NOTHING;
+INSERT INTO stores (name, code, branch_code, address, country_id, province_id, region_id, contact_person, phone, email) VALUES
+('Head Office', 'HO', 'HO001', '123 Main Street, Johannesburg', (SELECT id FROM countries WHERE code = 'ZA'), (SELECT id FROM provinces WHERE code = 'GP'), (SELECT id FROM regions WHERE name = 'SADC'), 'John Smith', '+27111234567', 'headoffice@zuri.com'),
+('Cape Town Branch', 'CT', 'CT001', '456 Long Street, Cape Town', (SELECT id FROM countries WHERE code = 'ZA'), (SELECT id FROM provinces WHERE code = 'WC'), (SELECT id FROM regions WHERE name = 'SADC'), 'Jane Doe', '+27219876543', 'capetown@zuri.com'),
+('Durban Branch', 'DBN', 'DBN001', '789 Beach Road, Durban', (SELECT id FROM countries WHERE code = 'ZA'), (SELECT id FROM provinces WHERE code = 'KZN'), (SELECT id FROM regions WHERE name = 'SADC'), 'Mike Johnson', '+27315556677', 'durban@zuri.com'),
+('Gaborone Branch', 'GB', 'GB001', '321 Main Mall, Gaborone', (SELECT id FROM countries WHERE code = 'BW'), (SELECT id FROM provinces WHERE code = 'CE'), (SELECT id FROM regions WHERE name = 'SADC'), 'Sarah Williams', '+26731234567', 'gaborone@zuri.com'),
+('Windhoek Branch', 'WH', 'WH001', '654 Independence Avenue, Windhoek', (SELECT id FROM countries WHERE code = 'NA'), (SELECT id FROM provinces WHERE code = 'KH'), (SELECT id FROM regions WHERE name = 'SADC'), 'David Brown', '+26461123456', 'windhoek@zuri.com')
+ON CONFLICT DO NOTHING;
