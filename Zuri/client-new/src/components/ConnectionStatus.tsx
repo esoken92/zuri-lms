@@ -18,41 +18,30 @@ export default function ConnectionStatus() {
     }
   }
 
-  const getStatusText = () => {
-    switch (status) {
-      case 'online':
-        return 'Online'
-      case 'offline':
-        return 'Offline'
-      case 'slow':
-        return 'Slow Connection'
-      default:
-        return 'Unknown'
-    }
-  }
-
   const handleSync = async () => {
     await syncNow()
   }
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-md border border-gray-200">
-      <div className={`w-3 h-3 rounded-full ${getStatusColor()} animate-pulse`} />
-      <span className="text-sm font-medium text-gray-700">{getStatusText()}</span>
-      {syncQueue.length > 0 && (
-        <>
-          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-            {syncQueue.length} pending
-          </span>
-          <button
-            onClick={handleSync}
-            disabled={isSyncing || status === 'offline'}
-            className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSyncing ? 'Syncing...' : 'Sync Now'}
-          </button>
-        </>
-      )}
+    <div className="fixed top-4 left-4 z-50 flex items-center gap-2">
+      <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-md border border-gray-200">
+        <div className={`w-3 h-3 rounded-full ${getStatusColor()} animate-pulse`} />
+        {syncQueue.length > 0 && (
+          <>
+            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+              {syncQueue.length}
+            </span>
+            <button
+              onClick={handleSync}
+              disabled={isSyncing || status === 'offline'}
+              className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Sync pending data"
+            >
+              {isSyncing ? '...' : 'Sync'}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
