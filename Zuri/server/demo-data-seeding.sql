@@ -240,39 +240,39 @@ ON CONFLICT (code) DO NOTHING;
 -- Security answer hashes (using bcrypt for demo purposes - same hash for all answers)
 -- In production, each answer should have its own unique hash
 INSERT INTO users_extended (user_id, first_name, last_name, email, phone, employee_id, country_id, province_id, region_id, store_id, security_question_1, security_answer_1_hash, security_question_2, security_answer_2_hash, is_active)
-VALUES 
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'Admin', 'User', 'demoAdmin@lms.com', '+27 11 123 4567', 'EMP001', 
-   (SELECT id FROM countries WHERE code = 'ZA'), 
-   (SELECT id FROM provinces WHERE name = 'Gauteng' AND country_id = (SELECT id FROM countries WHERE code = 'ZA')),
-   (SELECT id FROM regions WHERE name = 'Johannesburg'),
-   (SELECT id FROM stores WHERE code = 'JHB001'),
+VALUES
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'Admin', 'User', 'demoAdmin@lms.com', '+27 11 123 4567', 'EMP001',
+   (SELECT id FROM countries WHERE code = 'ZA' LIMIT 1),
+   (SELECT id FROM provinces WHERE name = 'Gauteng' AND country_id = (SELECT id FROM countries WHERE code = 'ZA' LIMIT 1) LIMIT 1),
+   (SELECT id FROM regions WHERE name = 'Johannesburg' LIMIT 1),
+   (SELECT id FROM stores WHERE code = 'JHB001' LIMIT 1),
    'What was the name of your first pet?', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
    'What is your mother''s maiden name?', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
    true),
-  
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'Manager', 'User', 'demoManager@lms.com', '+27 21 234 5678', 'EMP002',
-   (SELECT id FROM countries WHERE code = 'ZA'),
-   (SELECT id FROM provinces WHERE name = 'Western Cape' AND country_id = (SELECT id FROM countries WHERE code = 'ZA')),
-   (SELECT id FROM regions WHERE name = 'Cape Town'),
-   (SELECT id FROM stores WHERE code = 'CPT001'),
+
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'Manager', 'User', 'demoManager@lms.com', '+27 21 234 5678', 'EMP002',
+   (SELECT id FROM countries WHERE code = 'ZA' LIMIT 1),
+   (SELECT id FROM provinces WHERE name = 'Western Cape' AND country_id = (SELECT id FROM countries WHERE code = 'ZA' LIMIT 1) LIMIT 1),
+   (SELECT id FROM regions WHERE name = 'Cape Town' LIMIT 1),
+   (SELECT id FROM stores WHERE code = 'CPT001' LIMIT 1),
    'What city were you born in?', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
    'What was your first car?', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
    true),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'Inspector', 'User', 'demoInspector@lms.com', '+27 31 345 6789', 'EMP003',
-   (SELECT id FROM countries WHERE code = 'ZA'),
-   (SELECT id FROM provinces WHERE name = 'KwaZulu-Natal' AND country_id = (SELECT id FROM countries WHERE code = 'ZA')),
-   (SELECT id FROM regions WHERE name = 'Durban'),
-   (SELECT id FROM stores WHERE code = 'DBN001'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'Inspector', 'User', 'demoInspector@lms.com', '+27 31 345 6789', 'EMP003',
+   (SELECT id FROM countries WHERE code = 'ZA' LIMIT 1),
+   (SELECT id FROM provinces WHERE name = 'KwaZulu-Natal' AND country_id = (SELECT id FROM countries WHERE code = 'ZA' LIMIT 1) LIMIT 1),
+   (SELECT id FROM regions WHERE name = 'Durban' LIMIT 1),
+   (SELECT id FROM stores WHERE code = 'DBN001' LIMIT 1),
    'What is your favorite color?', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
    'What elementary school did you attend?', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
    true),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'Regular', 'User', 'demoUser@lms.com', '+27 12 456 7890', 'EMP004',
-   (SELECT id FROM countries WHERE code = 'ZA'),
-   (SELECT id FROM provinces WHERE name = 'Gauteng' AND country_id = (SELECT id FROM countries WHERE code = 'ZA')),
-   (SELECT id FROM regions WHERE name = 'Pretoria'),
-   (SELECT id FROM stores WHERE code = 'PTA001'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'Regular', 'User', 'demoUser@lms.com', '+27 12 456 7890', 'EMP004',
+   (SELECT id FROM countries WHERE code = 'ZA' LIMIT 1),
+   (SELECT id FROM provinces WHERE name = 'Gauteng' AND country_id = (SELECT id FROM countries WHERE code = 'ZA' LIMIT 1) LIMIT 1),
+   (SELECT id FROM regions WHERE name = 'Pretoria' LIMIT 1),
+   (SELECT id FROM stores WHERE code = 'PTA001' LIMIT 1),
    'What is the name of your favorite teacher?', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
    'What year did you graduate from high school?', '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
    true)
@@ -285,146 +285,146 @@ ON CONFLICT (user_id) DO NOTHING;
 -- Inspections (20 sample inspections with different statuses)
 INSERT INTO inspections (user_id, user_name, company_id, depot_id, inspection_date, location, header, vehicles, timestamp, created_at)
 VALUES 
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 
-   (SELECT id FROM companies WHERE name = 'TransLogistics SA'), 
-   (SELECT id FROM depots WHERE location = 'Johannesburg Depot'),
-   '2024-01-15', 'Johannesburg', 'Weekly Fleet Inspection', 
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Johannesburg Depot' LIMIT 1),
+   '2024-01-15', 'Johannesburg', 'Weekly Fleet Inspection',
    '[{"vehicleId": "VH001", "registration": "CA 123 456", "tyres": [{"position": "FL", "brand": "Michelin", "pattern": "X Multi HDD", "depth": 22.5}, {"position": "FR", "brand": "Michelin", "pattern": "X Multi HDD", "depth": 22.0}]}]',
    '2024-01-15T10:30:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'FleetWise Solutions'),
-   (SELECT id FROM depots WHERE location = 'Cape Town Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Cape Town Depot' LIMIT 1),
    '2024-01-16', 'Cape Town', 'Monthly Safety Check',
    '[{"vehicleId": "VH002", "registration": "CA 789 012", "tyres": [{"position": "FL", "brand": "Bridgestone", "pattern": "M840", "depth": 16.5}, {"position": "FR", "brand": "Bridgestone", "pattern": "M840", "depth": 16.0}]}]',
    '2024-01-16T14:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport'),
-   (SELECT id FROM depots WHERE location = 'Durban Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Durban Depot' LIMIT 1),
    '2024-01-17', 'Durban', 'Pre-trip Inspection',
    '[{"vehicleId": "VH003", "registration": "ND 345 678", "tyres": [{"position": "FL", "brand": "Continental", "pattern": "HSL2", "depth": 21.0}, {"position": "FR", "brand": "Continental", "pattern": "HSL2", "depth": 20.5}]}]',
    '2024-01-17T08:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics'),
-   (SELECT id FROM depots WHERE location = 'Pretoria Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Pretoria Depot' LIMIT 1),
    '2024-01-18', 'Pretoria', 'Routine Inspection',
    '[{"vehicleId": "VH004", "registration": "GP 901 234", "tyres": [{"position": "FL", "brand": "Goodyear", "pattern": "G372A", "depth": 22.0}, {"position": "FR", "brand": "Goodyear", "pattern": "G372A", "depth": 21.5}]}]',
    '2024-01-18T11:30:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'QuickMove Freight'),
-   (SELECT id FROM depots WHERE location = 'Port Elizabeth Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Port Elizabeth Depot' LIMIT 1),
    '2024-01-19', 'Port Elizabeth', 'Post-trip Inspection',
    '[{"vehicleId": "VH005", "registration": "EC 567 890", "tyres": [{"position": "FL", "brand": "Dunlop", "pattern": "SP344", "depth": 18.0}, {"position": "FR", "brand": "Dunlop", "pattern": "SP344", "depth": 17.5}]}]',
    '2024-01-19T16:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'TransLogistics SA'),
-   (SELECT id FROM depots WHERE location = 'Cape Town Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Cape Town Depot' LIMIT 1),
    '2024-01-20', 'Cape Town', 'Quarterly Audit',
    '[{"vehicleId": "VH006", "registration": "CA 234 567", "tyres": [{"position": "FL", "brand": "Pirelli", "pattern": "FR01", "depth": 22.0}, {"position": "FR", "brand": "Pirelli", "pattern": "FR01", "depth": 21.5}]}]',
    '2024-01-20T09:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'FleetWise Solutions'),
-   (SELECT id FROM depots WHERE location = 'Nelspruit Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Nelspruit Depot' LIMIT 1),
    '2024-01-21', 'Nelspruit', 'Weekly Check',
    '[{"vehicleId": "VH007", "registration": "MP 890 123", "tyres": [{"position": "FL", "brand": "Yokohama", "pattern": "MY01", "depth": 21.0}, {"position": "FR", "brand": "Yokohama", "pattern": "MY01", "depth": 20.5}]}]',
    '2024-01-21T13:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport'),
-   (SELECT id FROM depots WHERE location = 'Polokwane Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Polokwane Depot' LIMIT 1),
    '2024-01-22', 'Polokwane', 'Safety Inspection',
    '[{"vehicleId": "VH008", "registration": "LIM 012 345", "tyres": [{"position": "FL", "brand": "Firestone", "pattern": "FS560", "depth": 20.5}, {"position": "FR", "brand": "Firestone", "pattern": "FS560", "depth": 20.0}]}]',
    '2024-01-22T10:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics'),
-   (SELECT id FROM depots WHERE location = 'Rustenburg Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Rustenburg Depot' LIMIT 1),
    '2024-01-23', 'Rustenburg', 'Daily Inspection',
    '[{"vehicleId": "VH009", "registration": "NW 456 789", "tyres": [{"position": "FL", "brand": "Kumho", "pattern": "KMA01", "depth": 21.5}, {"position": "FR", "brand": "Kumho", "pattern": "KMA01", "depth": 21.0}]}]',
    '2024-01-23T07:30:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'QuickMove Freight'),
-   (SELECT id FROM depots WHERE location = 'Kimberley Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Kimberley Depot' LIMIT 1),
    '2024-01-24', 'Kimberley', 'Compliance Check',
-   '[{"vehicleId": "VH010", "registration": 'NC 678 901', "tyres": [{"position": "FL", "brand": "Toyo", "pattern": "M607Z", "depth": 22.0}, {"position": "FR", "brand": "Toyo", "pattern": "M607Z", "depth": 21.5}]}]',
+   '[{"vehicleId": "VH010", "registration": "NC 678 901", "tyres": [{"position": "FL", "brand": "Toyo", "pattern": "M607Z", "depth": 22.0}, {"position": "FR", "brand": "Toyo", "pattern": "M607Z", "depth": 21.5}]}]',
    '2024-01-24T15:00:00Z', CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- Add 10 more inspections for variety
 INSERT INTO inspections (user_id, user_name, company_id, depot_id, inspection_date, location, header, vehicles, timestamp, created_at)
-VALUES 
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'TransLogistics SA'),
-   (SELECT id FROM depots WHERE location = 'Johannesburg Depot'),
+VALUES
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Johannesburg Depot' LIMIT 1),
    '2024-01-25', 'Johannesburg', 'Fleet Assessment',
    '[{"vehicleId": "VH011", "registration": "GP 234 567", "tyres": [{"position": "FL", "brand": "Michelin", "pattern": "X Multi Way", "depth": 18.5}]}]',
    '2024-01-25T11:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'FleetWise Solutions'),
-   (SELECT id FROM depots WHERE location = 'Pretoria Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Pretoria Depot' LIMIT 1),
    '2024-01-26', 'Pretoria', 'Quality Check',
    '[{"vehicleId": "VH012", "registration": "GP 890 123", "tyres": [{"position": "FL", "brand": "Bridgestone", "pattern": "R250", "depth": 20.0}]}]',
    '2024-01-26T09:30:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport'),
-   (SELECT id FROM depots WHERE location = 'East London Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'East London Depot' LIMIT 1),
    '2024-01-27', 'East London', 'Routine Check',
    '[{"vehicleId": "VH013", "registration": "EC 345 678", "tyres": [{"position": "FL", "brand": "Continental", "pattern": "Conti Eco", "depth": 17.5}]}]',
    '2024-01-27T14:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics'),
-   (SELECT id FROM depots WHERE location = 'Witbank Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Witbank Depot' LIMIT 1),
    '2024-01-28', 'Witbank', 'Safety Audit',
    '[{"vehicleId": "VH014", "registration": "MP 567 890", "tyres": [{"position": "FL", "brand": "Goodyear", "pattern": "G395", "depth": 19.0}]}]',
    '2024-01-28T10:30:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'QuickMove Freight'),
-   (SELECT id FROM depots WHERE location = 'Secunda Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Secunda Depot' LIMIT 1),
    '2024-01-29', 'Secunda', 'Weekly Inspection',
    '[{"vehicleId": "VH015", "registration": "MP 901 234", "tyres": [{"position": "FL", "brand": "Dunlop", "pattern": "SP331", "depth": 21.5}]}]',
    '2024-01-29T12:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'TransLogistics SA'),
-   (SELECT id FROM depots WHERE location = 'Durban Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Durban Depot' LIMIT 1),
    '2024-01-30', 'Durban', 'Monthly Review',
    '[{"vehicleId": "VH016", "registration": "ND 789 012", "tyres": [{"position": "FL", "brand": "Pirelli", "pattern": "TH01", "depth": 19.5}]}]',
    '2024-01-30T08:30:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'FleetWise Solutions'),
-   (SELECT id FROM depots WHERE location = 'Port Elizabeth Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Port Elizabeth Depot' LIMIT 1),
    '2024-01-31', 'Port Elizabeth', 'Fleet Check',
    '[{"vehicleId": "VH017", "registration": "EC 012 345", "tyres": [{"position": "FL", "brand": "Yokohama", "pattern": "RY61", "depth": 18.5}]}]',
    '2024-01-31T15:30:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport'),
-   (SELECT id FROM depots WHERE location = 'Bloemfontein Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Bloemfontein Depot' LIMIT 1),
    '2024-02-01', 'Bloemfontein', 'Compliance Audit',
    '[{"vehicleId": "VH018", "registration": "FS 456 789", "tyres": [{"position": "FL", "brand": "Firestone", "pattern": "FS425", "depth": 17.0}]}]',
    '2024-02-01T11:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics'),
-   (SELECT id FROM depots WHERE location = 'Kimberley Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'Kimberley Depot' LIMIT 1),
    '2024-02-02', 'Kimberley', 'Daily Check',
    '[{"vehicleId": "VH019", "registration": "NC 890 123", "tyres": [{"position": "FL", "brand": "Kumho", "pattern": "KRS02", "depth": 18.0}]}]',
    '2024-02-02T07:00:00Z', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'QuickMove Freight'),
-   (SELECT id FROM depots WHERE location = 'George Depot'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
+   (SELECT id FROM depots WHERE location = 'George Depot' LIMIT 1),
    '2024-02-03', 'George', 'Final Inspection',
    '[{"vehicleId": "VH020", "registration": "WC 234 567", "tyres": [{"position": "FL", "brand": "Toyo", "pattern": "M627", "depth": 19.0}]}]',
    '2024-02-03T13:30:00Z', CURRENT_TIMESTAMP)
@@ -432,158 +432,158 @@ ON CONFLICT DO NOTHING;
 
 -- Scraps (15 sample scrap records with various damage codes)
 INSERT INTO scraps (user_id, user_name, store_id, items, status, created_at)
-VALUES 
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM stores WHERE code = 'JHB001'),
+VALUES
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM stores WHERE code = 'JHB001' LIMIT 1),
    '[{"brand": "Michelin", "pattern": "X Multi HDD", "damageCode": "TR-1", "damageDescription": "Puncture/Cut (To Interior)", "dot": "202345", "retreadPattern": null}]',
    'Submitted', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM stores WHERE code = 'CPT001'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM stores WHERE code = 'CPT001' LIMIT 1),
    '[{"brand": "Bridgestone", "pattern": "M840", "damageCode": "TR-2", "damageDescription": "Puncture/Cut (Not To Interior)", "dot": "202346", "retreadPattern": null}]',
    'Draft', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM stores WHERE code = 'DBN001'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM stores WHERE code = 'DBN001' LIMIT 1),
    '[{"brand": "Continental", "pattern": "HSL2", "damageCode": "TR-3", "damageDescription": "Chipping/Chunking", "dot": "202347", "retreadPattern": null}]',
    'Approved', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM stores WHERE code = 'PTA001'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM stores WHERE code = 'PTA001' LIMIT 1),
    '[{"brand": "Goodyear", "pattern": "G372A", "damageCode": "SH-1", "damageDescription": "Puncture/Cut (To Interior)", "dot": "202348", "retreadPattern": null}]',
    'Submitted', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM stores WHERE code = 'PE001'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM stores WHERE code = 'PE001' LIMIT 1),
    '[{"brand": "Dunlop", "pattern": "SP344", "damageCode": "SW-1", "damageDescription": "Puncture/Cut (To Interior)", "dot": "202349", "retreadPattern": null}]',
    'Draft', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM stores WHERE code = 'NLP001'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM stores WHERE code = 'NLP001' LIMIT 1),
    '[{"brand": "Pirelli", "pattern": "FR01", "damageCode": "BD-1", "damageDescription": "Cut", "dot": "202350", "retreadPattern": null}]',
    'Approved', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM stores WHERE code = 'POL001'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM stores WHERE code = 'POL001' LIMIT 1),
    '[{"brand": "Yokohama", "pattern": "MY01", "damageCode": "IN-1", "damageDescription": "Cut", "dot": "202351", "retreadPattern": null}]',
    'Submitted', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM stores WHERE code = 'RUS001'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM stores WHERE code = 'RUS001' LIMIT 1),
    '[{"brand": "Firestone", "pattern": "FS560", "damageCode": "GN-1", "damageDescription": "Improper Repair", "dot": "202352", "retreadPattern": null}]',
    'Draft', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM stores WHERE code = 'KIM001'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM stores WHERE code = 'KIM001' LIMIT 1),
    '[{"brand": "Kumho", "pattern": "KMA01", "damageCode": "TR-1", "damageDescription": "Puncture/Cut (To Interior)", "dot": "202353", "retreadPattern": null}]',
    'Approved', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM stores WHERE code = 'BLM001'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM stores WHERE code = 'BLM001' LIMIT 1),
    '[{"brand": "Toyo", "pattern": "M607Z", "damageCode": "TR-2", "damageDescription": "Puncture/Cut (Not To Interior)", "dot": "202354", "retreadPattern": null}]',
    'Submitted', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM stores WHERE code = 'JHB002'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM stores WHERE code = 'JHB002' LIMIT 1),
    '[{"brand": "Michelin", "pattern": "X Multi Way", "damageCode": "TR-3", "damageDescription": "Chipping/Chunking", "dot": "202355", "retreadPattern": null}]',
    'Draft', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM stores WHERE code = 'CPT002'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM stores WHERE code = 'CPT002' LIMIT 1),
    '[{"brand": "Bridgestone", "pattern": "R250", "damageCode": "SH-1", "damageDescription": "Puncture/Cut (To Interior)", "dot": "202356", "retreadPattern": null}]',
    'Approved', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM stores WHERE code = 'DBN002'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM stores WHERE code = 'DBN002' LIMIT 1),
    '[{"brand": "Continental", "pattern": "Conti Eco", "damageCode": "SW-1", "damageDescription": "Puncture/Cut (To Interior)", "dot": "202357", "retreadPattern": null}]',
    'Submitted', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser',
-   (SELECT id FROM stores WHERE code = 'PTA002'),
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
+   (SELECT id FROM stores WHERE code = 'PTA002' LIMIT 1),
    '[{"brand": "Goodyear", "pattern": "G395", "damageCode": "BD-1", "damageDescription": "Cut", "dot": "202358", "retreadPattern": null}]',
    'Draft', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector',
-   (SELECT id FROM stores WHERE code = 'EKU001'),
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
+   (SELECT id FROM stores WHERE code = 'EKU001' LIMIT 1),
    '[{"brand": "Dunlop", "pattern": "SP331", "damageCode": "IN-1", "damageDescription": "Cut", "dot": "202359", "retreadPattern": null}]',
    'Approved', CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- Activity Logs (30 sample activity logs showing different user actions)
 INSERT INTO activity_logs (user_id, username, activity_type, activity_description, table_name, record_id, ip_address, user_agent, success, created_at)
-VALUES 
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'demoAdmin', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoAdmin'), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'demoAdmin', 'CREATE', 'Created new company record', 'companies', (SELECT id FROM companies WHERE name = 'TransLogistics SA'), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'demoManager', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoManager'), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'demoManager', 'UPDATE', 'Updated depot information', 'depots', (SELECT id FROM depots WHERE location = 'Johannesburg Depot'), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoInspector'), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'CREATE', 'Created new inspection', 'inspections', (SELECT id FROM inspections LIMIT 1 OFFSET 0), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoUser'), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'CREATE', 'Created scrap record', 'scraps', (SELECT id FROM scraps LIMIT 1 OFFSET 0), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'demoAdmin', 'DELETE', 'Deleted user draft', 'user_drafts', null, '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'demoManager', 'VIEW', 'Viewed inspection report', 'inspections', (SELECT id FROM inspections LIMIT 1 OFFSET 1), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'UPDATE', 'Updated inspection status', 'inspections', (SELECT id FROM inspections LIMIT 1 OFFSET 2), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'CREATE', 'Submitted user suggestion', 'user_suggestions', null, '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'demoAdmin', 'APPROVE', 'Approved scrap record', 'scraps', (SELECT id FROM scraps LIMIT 1 OFFSET 2), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'demoManager', 'EXPORT', 'Exported inspection data', 'inspections', null, '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'CREATE', 'Created new scrap record', 'scraps', (SELECT id FROM scraps LIMIT 1 OFFSET 5), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'VIEW', 'Viewed tyre specifications', 'tyres', (SELECT id FROM tyres LIMIT 1), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'demoAdmin', 'UPDATE', 'Updated user permissions', 'users', (SELECT id FROM users WHERE username = 'demoUser'), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'demoManager', 'CREATE', 'Created new depot', 'depots', (SELECT id FROM depots WHERE location = 'Cape Town Depot'), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoInspector'), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'UPDATE', 'Updated scrap record status', 'scraps', (SELECT id FROM scraps LIMIT 1 OFFSET 7), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'demoAdmin', 'VIEW', 'Viewed activity logs', 'activity_logs', null, '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'demoManager', 'REVIEW', 'Reviewed user suggestion', 'user_suggestions', null, '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'CREATE', 'Created inspection draft', 'inspections_drafts', null, '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'DELETE', 'Deleted scrap record', 'scraps', null, '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'demoAdmin', 'UPDATE', 'Updated company information', 'companies', (SELECT id FROM companies WHERE name = 'FleetWise Solutions'), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'demoManager', 'CREATE', 'Created vehicle configuration', 'vehicle_configurations', (SELECT id FROM vehicle_configurations WHERE code = '6X4-TRUCK'), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'VIEW', 'Viewed store information', 'stores', (SELECT id FROM stores WHERE code = 'JHB001'), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'CREATE', 'Created new inspection', 'inspections', (SELECT id FROM inspections LIMIT 1 OFFSET 10), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoAdmin'), 'demoAdmin', 'LOGOUT', 'User logged out successfully', 'users', (SELECT id FROM users WHERE username = 'demoAdmin'), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
-  ((SELECT id FROM users WHERE username = 'demoManager'), 'demoManager', 'LOGOUT', 'User logged out successfully', 'users', (SELECT id FROM users WHERE username = 'demoManager'), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP)
+VALUES
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'demoAdmin', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'demoAdmin', 'CREATE', 'Created new company record', 'companies', (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'demoManager', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'demoManager', 'UPDATE', 'Updated depot information', 'depots', (SELECT id FROM depots WHERE location = 'Johannesburg Depot' LIMIT 1), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'CREATE', 'Created new inspection', 'inspections', (SELECT id FROM inspections LIMIT 1 OFFSET 0), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'CREATE', 'Created scrap record', 'scraps', (SELECT id FROM scraps LIMIT 1 OFFSET 0), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'demoAdmin', 'DELETE', 'Deleted user draft', 'user_drafts', null, '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'demoManager', 'VIEW', 'Viewed inspection report', 'inspections', (SELECT id FROM inspections LIMIT 1 OFFSET 1), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'UPDATE', 'Updated inspection status', 'inspections', (SELECT id FROM inspections LIMIT 1 OFFSET 2), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'CREATE', 'Submitted user suggestion', 'user_suggestions', null, '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'demoAdmin', 'APPROVE', 'Approved scrap record', 'scraps', (SELECT id FROM scraps LIMIT 1 OFFSET 2), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'demoManager', 'EXPORT', 'Exported inspection data', 'inspections', null, '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'CREATE', 'Created new scrap record', 'scraps', (SELECT id FROM scraps LIMIT 1 OFFSET 5), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'VIEW', 'Viewed tyre specifications', 'tyres', (SELECT id FROM tyres LIMIT 1), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'demoAdmin', 'UPDATE', 'Updated user permissions', 'users', (SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'demoManager', 'CREATE', 'Created new depot', 'depots', (SELECT id FROM depots WHERE location = 'Cape Town Depot' LIMIT 1), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'LOGIN', 'User logged in successfully', 'users', (SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'UPDATE', 'Updated scrap record status', 'scraps', (SELECT id FROM scraps LIMIT 1 OFFSET 7), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'demoAdmin', 'VIEW', 'Viewed activity logs', 'activity_logs', null, '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'demoManager', 'REVIEW', 'Reviewed user suggestion', 'user_suggestions', null, '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'CREATE', 'Created inspection draft', 'inspections_drafts', null, '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'DELETE', 'Deleted scrap record', 'scraps', null, '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'demoAdmin', 'UPDATE', 'Updated company information', 'companies', (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'demoManager', 'CREATE', 'Created vehicle configuration', 'vehicle_configurations', (SELECT id FROM vehicle_configurations WHERE code = '6X4-TRUCK' LIMIT 1), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'VIEW', 'Viewed store information', 'stores', (SELECT id FROM stores WHERE code = 'JHB001' LIMIT 1), '192.168.1.102', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'CREATE', 'Created new inspection', 'inspections', (SELECT id FROM inspections LIMIT 1 OFFSET 10), '192.168.1.103', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), 'demoAdmin', 'LOGOUT', 'User logged out successfully', 'users', (SELECT id FROM users WHERE username = 'demoAdmin' LIMIT 1), '192.168.1.100', 'Mozilla/5.0', true, CURRENT_TIMESTAMP),
+  ((SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), 'demoManager', 'LOGOUT', 'User logged out successfully', 'users', (SELECT id FROM users WHERE username = 'demoManager' LIMIT 1), '192.168.1.101', 'Mozilla/5.0', true, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- User Suggestions (10 sample user suggestions with different statuses)
 INSERT INTO user_suggestions (user_id, username, suggestion_type, suggestion_data, status, admin_reviewed_by, admin_notes, created_at)
-VALUES 
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'NEW_TYRE_MODEL', 
-   '{"brand": "Michelin", "pattern": "X Multi Z", "specifications": "New fuel efficient pattern"}', 
+VALUES
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'NEW_TYRE_MODEL',
+   '{"brand": "Michelin", "pattern": "X Multi Z", "specifications": "New fuel efficient pattern"}',
    'pending', null, null, CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'DAMAGE_CODE_UPDATE',
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'DAMAGE_CODE_UPDATE',
    '{"location": "TREAD", "code": "TR-4", "description": "Sidewall crack"}',
    'approved', 'demoAdmin', 'Added to scrap_data table', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'FEATURE_REQUEST',
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'FEATURE_REQUEST',
    '{"feature": "Mobile app", "description": "Request for mobile application"}',
    'pending', null, null, CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'REPORT_IMPROVEMENT',
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'REPORT_IMPROVEMENT',
    '{"report": "Inspection Report", "suggestion": "Add export to PDF"}',
    'approved', 'demoAdmin', 'Will be included in next release', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'UI_ENHANCEMENT',
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'UI_ENHANCEMENT',
    '{"section": "Dashboard", "suggestion": "Add charts and graphs"}',
    'pending', null, null, CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'NEW_VEHICLE_CONFIG',
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'NEW_VEHICLE_CONFIG',
    '{"code": "6X2-TRUCK", "name": "6x2 Truck", "description": "6x2 configuration"}',
    'approved', 'demoAdmin', 'Configuration added', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'DATA_CORRECTION',
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'DATA_CORRECTION',
    '{"table": "tyres", "id": "1", "correction": "Update tread depth"}',
    'rejected', 'demoAdmin', 'Data is correct', CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'WORKFLOW_IMPROVEMENT',
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'WORKFLOW_IMPROVEMENT',
    '{"workflow": "Inspection", "suggestion": "Add auto-save feature"}',
    'pending', null, null, CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoUser'), 'demoUser', 'INTEGRATION_REQUEST',
+
+  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser', 'INTEGRATION_REQUEST',
    '{"system": "SAP", "description": "Integrate with SAP for inventory"}',
    'pending', null, null, CURRENT_TIMESTAMP),
-  
-  ((SELECT id FROM users WHERE username = 'demoInspector'), 'demoInspector', 'TRAINING_REQUEST',
+
+  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector', 'TRAINING_REQUEST',
    '{"topic": "Advanced tyre inspection", "description": "Request for training session"}',
    'approved', 'demoAdmin', 'Training scheduled for next month', CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
