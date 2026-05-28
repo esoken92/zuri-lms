@@ -282,152 +282,279 @@ ON CONFLICT (user_id) DO NOTHING;
 -- ACTIVITY DATA
 -- ============================================
 
+-- Get auth user IDs for demo users
+WITH demo_users AS (
+  SELECT 
+    id,
+    CASE 
+      WHEN email = 'demoAdmin@lms.com' THEN 'demoAdmin'
+      WHEN email = 'demoManager@lms.com' THEN 'demoManager'
+      WHEN email = 'demoInspector@lms.com' THEN 'demoInspector'
+      WHEN email = 'demoUser@lms.com' THEN 'demoUser'
+    END as username
+  FROM auth.users
+  WHERE email IN ('demoAdmin@lms.com', 'demoManager@lms.com', 'demoInspector@lms.com', 'demoUser@lms.com')
+)
+
 -- Inspections (20 sample inspections with different statuses)
 INSERT INTO inspections (user_id, user_name, company_id, depot_id, inspection_date, location, header, vehicles, timestamp, created_at)
-VALUES 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Johannesburg Depot' LIMIT 1),
-   '2024-01-15', 'Johannesburg', 'Weekly Fleet Inspection',
-   '[{"vehicleId": "VH001", "registration": "CA 123 456", "tyres": [{"position": "FL", "brand": "Michelin", "pattern": "X Multi HDD", "depth": 22.5}, {"position": "FR", "brand": "Michelin", "pattern": "X Multi HDD", "depth": 22.0}]}]',
-   '2024-01-15T10:30:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Johannesburg Depot' LIMIT 1),
+  '2024-01-15', 'Johannesburg', 'Weekly Fleet Inspection',
+  '[{"vehicleId": "VH001", "registration": "CA 123 456", "tyres": [{"position": "FL", "brand": "Michelin", "pattern": "X Multi HDD", "depth": 22.5}, {"position": "FR", "brand": "Michelin", "pattern": "X Multi HDD", "depth": 22.0}]}]',
+  '2024-01-15T10:30:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Cape Town Depot' LIMIT 1),
-   '2024-01-16', 'Cape Town', 'Monthly Safety Check',
-   '[{"vehicleId": "VH002", "registration": "CA 789 012", "tyres": [{"position": "FL", "brand": "Bridgestone", "pattern": "M840", "depth": 16.5}, {"position": "FR", "brand": "Bridgestone", "pattern": "M840", "depth": 16.0}]}]',
-   '2024-01-16T14:00:00Z', CURRENT_TIMESTAMP),
+UNION ALL
 
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Durban Depot' LIMIT 1),
-   '2024-01-17', 'Durban', 'Pre-trip Inspection',
-   '[{"vehicleId": "VH003", "registration": "ND 345 678", "tyres": [{"position": "FL", "brand": "Continental", "pattern": "HSL2", "depth": 21.0}, {"position": "FR", "brand": "Continental", "pattern": "HSL2", "depth": 20.5}]}]',
-   '2024-01-17T08:00:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Cape Town Depot' LIMIT 1),
+  '2024-01-16', 'Cape Town', 'Monthly Safety Check',
+  '[{"vehicleId": "VH002", "registration": "CA 789 012", "tyres": [{"position": "FL", "brand": "Bridgestone", "pattern": "M840", "depth": 16.5}, {"position": "FR", "brand": "Bridgestone", "pattern": "M840", "depth": 16.0}]}]',
+  '2024-01-16T14:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Pretoria Depot' LIMIT 1),
-   '2024-01-18', 'Pretoria', 'Routine Inspection',
-   '[{"vehicleId": "VH004", "registration": "GP 901 234", "tyres": [{"position": "FL", "brand": "Goodyear", "pattern": "G372A", "depth": 22.0}, {"position": "FR", "brand": "Goodyear", "pattern": "G372A", "depth": 21.5}]}]',
-   '2024-01-18T11:30:00Z', CURRENT_TIMESTAMP),
+UNION ALL
 
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Port Elizabeth Depot' LIMIT 1),
-   '2024-01-19', 'Port Elizabeth', 'Post-trip Inspection',
-   '[{"vehicleId": "VH005", "registration": "EC 567 890", "tyres": [{"position": "FL", "brand": "Dunlop", "pattern": "SP344", "depth": 18.0}, {"position": "FR", "brand": "Dunlop", "pattern": "SP344", "depth": 17.5}]}]',
-   '2024-01-19T16:00:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Durban Depot' LIMIT 1),
+  '2024-01-17', 'Durban', 'Pre-trip Inspection',
+  '[{"vehicleId": "VH003", "registration": "ND 345 678", "tyres": [{"position": "FL", "brand": "Continental", "pattern": "HSL2", "depth": 21.0}, {"position": "FR", "brand": "Continental", "pattern": "HSL2", "depth": 20.5}]}]',
+  '2024-01-17T08:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Cape Town Depot' LIMIT 1),
-   '2024-01-20', 'Cape Town', 'Quarterly Audit',
-   '[{"vehicleId": "VH006", "registration": "CA 234 567", "tyres": [{"position": "FL", "brand": "Pirelli", "pattern": "FR01", "depth": 22.0}, {"position": "FR", "brand": "Pirelli", "pattern": "FR01", "depth": 21.5}]}]',
-   '2024-01-20T09:00:00Z', CURRENT_TIMESTAMP),
+UNION ALL
 
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Nelspruit Depot' LIMIT 1),
-   '2024-01-21', 'Nelspruit', 'Weekly Check',
-   '[{"vehicleId": "VH007", "registration": "MP 890 123", "tyres": [{"position": "FL", "brand": "Yokohama", "pattern": "MY01", "depth": 21.0}, {"position": "FR", "brand": "Yokohama", "pattern": "MY01", "depth": 20.5}]}]',
-   '2024-01-21T13:00:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Pretoria Depot' LIMIT 1),
+  '2024-01-18', 'Pretoria', 'Routine Inspection',
+  '[{"vehicleId": "VH004", "registration": "GP 901 234", "tyres": [{"position": "FL", "brand": "Goodyear", "pattern": "G372A", "depth": 22.0}, {"position": "FR", "brand": "Goodyear", "pattern": "G372A", "depth": 21.5}]}]',
+  '2024-01-18T11:30:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Polokwane Depot' LIMIT 1),
-   '2024-01-22', 'Polokwane', 'Safety Inspection',
-   '[{"vehicleId": "VH008", "registration": "LIM 012 345", "tyres": [{"position": "FL", "brand": "Firestone", "pattern": "FS560", "depth": 20.5}, {"position": "FR", "brand": "Firestone", "pattern": "FS560", "depth": 20.0}]}]',
-   '2024-01-22T10:00:00Z', CURRENT_TIMESTAMP),
+UNION ALL
 
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Rustenburg Depot' LIMIT 1),
-   '2024-01-23', 'Rustenburg', 'Daily Inspection',
-   '[{"vehicleId": "VH009", "registration": "NW 456 789", "tyres": [{"position": "FL", "brand": "Kumho", "pattern": "KMA01", "depth": 21.5}, {"position": "FR", "brand": "Kumho", "pattern": "KMA01", "depth": 21.0}]}]',
-   '2024-01-23T07:30:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Port Elizabeth Depot' LIMIT 1),
+  '2024-01-19', 'Port Elizabeth', 'Post-trip Inspection',
+  '[{"vehicleId": "VH005", "registration": "EC 567 890", "tyres": [{"position": "FL", "brand": "Dunlop", "pattern": "SP344", "depth": 18.0}, {"position": "FR", "brand": "Dunlop", "pattern": "SP344", "depth": 17.5}]}]',
+  '2024-01-19T16:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Kimberley Depot' LIMIT 1),
-   '2024-01-24', 'Kimberley', 'Compliance Check',
-   '[{"vehicleId": "VH010", "registration": "NC 678 901", "tyres": [{"position": "FL", "brand": "Toyo", "pattern": "M607Z", "depth": 22.0}, {"position": "FR", "brand": "Toyo", "pattern": "M607Z", "depth": 21.5}]}]',
-   '2024-01-24T15:00:00Z', CURRENT_TIMESTAMP)
-ON CONFLICT DO NOTHING;
+UNION ALL
 
--- Add 10 more inspections for variety
-INSERT INTO inspections (user_id, user_name, company_id, depot_id, inspection_date, location, header, vehicles, timestamp, created_at)
-VALUES
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Johannesburg Depot' LIMIT 1),
-   '2024-01-25', 'Johannesburg', 'Fleet Assessment',
-   '[{"vehicleId": "VH011", "registration": "GP 234 567", "tyres": [{"position": "FL", "brand": "Michelin", "pattern": "X Multi Way", "depth": 18.5}]}]',
-   '2024-01-25T11:00:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Cape Town Depot' LIMIT 1),
+  '2024-01-20', 'Cape Town', 'Quarterly Audit',
+  '[{"vehicleId": "VH006", "registration": "CA 234 567", "tyres": [{"position": "FL", "brand": "Pirelli", "pattern": "FR01", "depth": 22.0}, {"position": "FR", "brand": "Pirelli", "pattern": "FR01", "depth": 21.5}]}]',
+  '2024-01-20T09:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Pretoria Depot' LIMIT 1),
-   '2024-01-26', 'Pretoria', 'Quality Check',
-   '[{"vehicleId": "VH012", "registration": "GP 890 123", "tyres": [{"position": "FL", "brand": "Bridgestone", "pattern": "R250", "depth": 20.0}]}]',
-   '2024-01-26T09:30:00Z', CURRENT_TIMESTAMP),
+UNION ALL
 
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'East London Depot' LIMIT 1),
-   '2024-01-27', 'East London', 'Routine Check',
-   '[{"vehicleId": "VH013", "registration": "EC 345 678", "tyres": [{"position": "FL", "brand": "Continental", "pattern": "Conti Eco", "depth": 17.5}]}]',
-   '2024-01-27T14:00:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Nelspruit Depot' LIMIT 1),
+  '2024-01-21', 'Nelspruit', 'Weekly Check',
+  '[{"vehicleId": "VH007", "registration": "MP 890 123", "tyres": [{"position": "FL", "brand": "Yokohama", "pattern": "MY01", "depth": 21.0}, {"position": "FR", "brand": "Yokohama", "pattern": "MY01", "depth": 20.5}]}]',
+  '2024-01-21T13:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Witbank Depot' LIMIT 1),
-   '2024-01-28', 'Witbank', 'Safety Audit',
-   '[{"vehicleId": "VH014", "registration": "MP 567 890", "tyres": [{"position": "FL", "brand": "Goodyear", "pattern": "G395", "depth": 19.0}]}]',
-   '2024-01-28T10:30:00Z', CURRENT_TIMESTAMP),
+UNION ALL
 
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Secunda Depot' LIMIT 1),
-   '2024-01-29', 'Secunda', 'Weekly Inspection',
-   '[{"vehicleId": "VH015", "registration": "MP 901 234", "tyres": [{"position": "FL", "brand": "Dunlop", "pattern": "SP331", "depth": 21.5}]}]',
-   '2024-01-29T12:00:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Polokwane Depot' LIMIT 1),
+  '2024-01-22', 'Polokwane', 'Safety Inspection',
+  '[{"vehicleId": "VH008", "registration": "LIM 012 345", "tyres": [{"position": "FL", "brand": "Firestone", "pattern": "FS560", "depth": 20.5}, {"position": "FR", "brand": "Firestone", "pattern": "FS560", "depth": 20.0}]}]',
+  '2024-01-22T10:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Durban Depot' LIMIT 1),
-   '2024-01-30', 'Durban', 'Monthly Review',
-   '[{"vehicleId": "VH016", "registration": "ND 789 012", "tyres": [{"position": "FL", "brand": "Pirelli", "pattern": "TH01", "depth": 19.5}]}]',
-   '2024-01-30T08:30:00Z', CURRENT_TIMESTAMP),
+UNION ALL
 
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Port Elizabeth Depot' LIMIT 1),
-   '2024-01-31', 'Port Elizabeth', 'Fleet Check',
-   '[{"vehicleId": "VH017", "registration": "EC 012 345", "tyres": [{"position": "FL", "brand": "Yokohama", "pattern": "RY61", "depth": 18.5}]}]',
-   '2024-01-31T15:30:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Rustenburg Depot' LIMIT 1),
+  '2024-01-23', 'Rustenburg', 'Daily Inspection',
+  '[{"vehicleId": "VH009", "registration": "NW 456 789", "tyres": [{"position": "FL", "brand": "Kumho", "pattern": "KMA01", "depth": 21.5}, {"position": "FR", "brand": "Kumho", "pattern": "KMA01", "depth": 21.0}]}]',
+  '2024-01-23T07:30:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Bloemfontein Depot' LIMIT 1),
-   '2024-02-01', 'Bloemfontein', 'Compliance Audit',
-   '[{"vehicleId": "VH018", "registration": "FS 456 789", "tyres": [{"position": "FL", "brand": "Firestone", "pattern": "FS425", "depth": 17.0}]}]',
-   '2024-02-01T11:00:00Z', CURRENT_TIMESTAMP),
+UNION ALL
 
-  ((SELECT id FROM users WHERE username = 'demoUser' LIMIT 1), 'demoUser',
-   (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'Kimberley Depot' LIMIT 1),
-   '2024-02-02', 'Kimberley', 'Daily Check',
-   '[{"vehicleId": "VH019", "registration": "NC 890 123", "tyres": [{"position": "FL", "brand": "Kumho", "pattern": "KRS02", "depth": 18.0}]}]',
-   '2024-02-02T07:00:00Z', CURRENT_TIMESTAMP),
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Kimberley Depot' LIMIT 1),
+  '2024-01-24', 'Kimberley', 'Compliance Check',
+  '[{"vehicleId": "VH010", "registration": "NC 678 901", "tyres": [{"position": "FL", "brand": "Toyo", "pattern": "M607Z", "depth": 22.0}, {"position": "FR", "brand": "Toyo", "pattern": "M607Z", "depth": 21.5}]}]',
+  '2024-01-24T15:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
 
-  ((SELECT id FROM users WHERE username = 'demoInspector' LIMIT 1), 'demoInspector',
-   (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
-   (SELECT id FROM depots WHERE location = 'George Depot' LIMIT 1),
-   '2024-02-03', 'George', 'Final Inspection',
-   '[{"vehicleId": "VH020", "registration": "WC 234 567", "tyres": [{"position": "FL", "brand": "Toyo", "pattern": "M627", "depth": 19.0}]}]',
-   '2024-02-03T13:30:00Z', CURRENT_TIMESTAMP)
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Johannesburg Depot' LIMIT 1),
+  '2024-01-25', 'Johannesburg', 'Fleet Assessment',
+  '[{"vehicleId": "VH011", "registration": "GP 234 567", "tyres": [{"position": "FL", "brand": "Michelin", "pattern": "X Multi Way", "depth": 18.5}]}]',
+  '2024-01-25T11:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Pretoria Depot' LIMIT 1),
+  '2024-01-26', 'Pretoria', 'Quality Check',
+  '[{"vehicleId": "VH012", "registration": "GP 890 123", "tyres": [{"position": "FL", "brand": "Bridgestone", "pattern": "R250", "depth": 20.0}]}]',
+  '2024-01-26T09:30:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'East London Depot' LIMIT 1),
+  '2024-01-27', 'East London', 'Routine Check',
+  '[{"vehicleId": "VH013", "registration": "EC 345 678", "tyres": [{"position": "FL", "brand": "Continental", "pattern": "Conti Eco", "depth": 17.5}]}]',
+  '2024-01-27T14:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Witbank Depot' LIMIT 1),
+  '2024-01-28', 'Witbank', 'Safety Audit',
+  '[{"vehicleId": "VH014", "registration": "MP 567 890", "tyres": [{"position": "FL", "brand": "Goodyear", "pattern": "G395", "depth": 19.0}]}]',
+  '2024-01-28T10:30:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Secunda Depot' LIMIT 1),
+  '2024-01-29', 'Secunda', 'Weekly Inspection',
+  '[{"vehicleId": "VH015", "registration": "MP 901 234", "tyres": [{"position": "FL", "brand": "Dunlop", "pattern": "SP331", "depth": 21.5}]}]',
+  '2024-01-29T12:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'TransLogistics SA' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Durban Depot' LIMIT 1),
+  '2024-01-30', 'Durban', 'Monthly Review',
+  '[{"vehicleId": "VH016", "registration": "ND 789 012", "tyres": [{"position": "FL", "brand": "Pirelli", "pattern": "TH01", "depth": 19.5}]}]',
+  '2024-01-30T08:30:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'FleetWise Solutions' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Port Elizabeth Depot' LIMIT 1),
+  '2024-01-31', 'Port Elizabeth', 'Fleet Check',
+  '[{"vehicleId": "VH017", "registration": "EC 012 345", "tyres": [{"position": "FL", "brand": "Yokohama", "pattern": "RY61", "depth": 18.5}]}]',
+  '2024-01-31T15:30:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'HeavyHaul Transport' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Bloemfontein Depot' LIMIT 1),
+  '2024-02-01', 'Bloemfontein', 'Compliance Audit',
+  '[{"vehicleId": "VH018", "registration": "FS 456 789", "tyres": [{"position": "FL", "brand": "Firestone", "pattern": "FS425", "depth": 17.0}]}]',
+  '2024-02-01T11:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'RoadMaster Logistics' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'Kimberley Depot' LIMIT 1),
+  '2024-02-02', 'Kimberley', 'Daily Check',
+  '[{"vehicleId": "VH019", "registration": "NC 890 123", "tyres": [{"position": "FL", "brand": "Kumho", "pattern": "KRS02", "depth": 18.0}]}]',
+  '2024-02-02T07:00:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoUser'
+
+UNION ALL
+
+SELECT
+  du.id,
+  du.username,
+  (SELECT id FROM companies WHERE name = 'QuickMove Freight' LIMIT 1),
+  (SELECT id FROM depots WHERE location = 'George Depot' LIMIT 1),
+  '2024-02-03', 'George', 'Final Inspection',
+  '[{"vehicleId": "VH020", "registration": "WC 234 567", "tyres": [{"position": "FL", "brand": "Toyo", "pattern": "M627", "depth": 19.0}]}]',
+  '2024-02-03T13:30:00Z', CURRENT_TIMESTAMP
+FROM demo_users du
+WHERE du.username = 'demoInspector'
 ON CONFLICT DO NOTHING;
 
 -- Scraps (15 sample scrap records with various damage codes)
