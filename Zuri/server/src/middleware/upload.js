@@ -1,15 +1,21 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const supabaseStorageService = require('../services/supabaseStorage');
 
-// Ensure uploads directory exists
+const useSupabase = process.env.USE_SUPABASE === 'true' || process.env.NODE_ENV === 'production';
+
+// Ensure uploads directory exists (for local development)
 const uploadsDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
+// Configure multer for memory storage (needed for Supabase)
+const memoryStorage = multer.memoryStorage();
+
+// Configure multer for disk storage (local development)
+const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
@@ -37,12 +43,50 @@ const fileFilter = (req, file, cb) => {
 
 // Upload configuration
 const upload = multer({
-  storage: storage,
+  storage: useSupabase ? memoryStorage : diskStorage,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
   fileFilter: fileFilter
 });
+
+// Custom upload handler that uses Supabase Storage when enabled
+const handleUpload = async (req, res, next) => {
+  if (!useSupabase) {
+    // Use original multer middleware for local development
+    return upload.single('photo')(req, res, next);
+  }
+
+  // Use Supabase Storage for production
+  upload.single('photo')(req, res, async (err) => {
+    if (err) {
+      return handleUploadErrors(err, req, res, next);
+    }
+
+    if (!req.file) {
+      return next();
+    }
+
+    try {
+      // Upload to Supabase Storage
+      const result = await supabaseStorageService.uploadFile(req.file, 'uploads', 'photos/');
+      
+      if (!result.success) {
+        return res.status(500).json({ error: 'Failed to upload file to storage', details: result.error });
+      }
+
+      // Attach Supabase file info to request
+      req.file.supabasePath = result.path;
+      req.file.supabaseUrl = result.url;
+      req.file.filename = result.path; // For backward compatibility
+
+      next();
+    } catch (error) {
+      console.error('[UPLOAD] Supabase upload error:', error);
+      return res.status(500).json({ error: 'Failed to upload file', details: error.message });
+    }
+  });
+};
 
 // Error handling middleware for multer
 const handleUploadErrors = (err, req, res, next) => {
@@ -60,4 +104,5 @@ const handleUploadErrors = (err, req, res, next) => {
 };
 
 module.exports = upload;
+module.exports.handleUpload = handleUpload;
 module.exports.handleUploadErrors = handleUploadErrors;

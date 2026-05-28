@@ -2,13 +2,116 @@ const bcrypt = require('bcrypt');
 const { pool, db } = require('../config/database');
 const { logActivity } = require('../utils/activityLogger');
 const { getClientIp, parseUserAgent } = require('../utils/clientInfo');
+const supabaseAuthService = require('../services/supabaseAuth');
+
+const useSupabase = process.env.USE_SUPABASE === 'true' || process.env.NODE_ENV === 'production';
 
 // Login controller
 const login = async (req, res) => {
-  const { username, password, clientInfo } = req.body;
+  const { username, password, email, clientInfo } = req.body;
   const ipAddress = getClientIp(req);
   const userAgent = req.headers['user-agent'];
 
+  // Use Supabase Auth if enabled
+  if (useSupabase) {
+    try {
+      // Support both username and email for login
+      const loginEmail = email || username;
+      
+      const result = await supabaseAuthService.signIn(loginEmail, password);
+      
+      if (!result.success) {
+        await logActivity({
+          userId: null,
+          username: loginEmail,
+          activityType: 'LOGIN_FAILED',
+          activityDescription: `Failed login attempt for: ${loginEmail}`,
+          ipAddress: ipAddress,
+          userAgent: userAgent,
+          success: false,
+          errorCode: 'AUTH_001',
+          errorMessage: result.error,
+          clientInfo: clientInfo || {}
+        });
+
+        return res.status(401).json({ error: result.error || 'Invalid credentials' });
+      }
+
+      const { data } = result;
+      const user = data.user;
+
+      // Parse user agent
+      const { browser, os, device } = parseUserAgent(userAgent);
+
+      // Create session record
+      const sessionResult = await pool.query(`
+        INSERT INTO user_sessions (
+          user_id, username, session_id, ip_address, user_agent,
+          browser, browser_version, device, device_type, os, os_version,
+          language, languages, screen_resolution, viewport_size, timezone,
+          platform, cookie_enabled, do_not_track
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        RETURNING id
+      `, [
+        user.id,
+        user.email,
+        data.session?.access_token || 'supabase-token',
+        ipAddress,
+        userAgent,
+        browser,
+        clientInfo?.browserVersion || null,
+        device,
+        clientInfo?.deviceType || null,
+        os,
+        clientInfo?.osVersion || null,
+        clientInfo?.language || null,
+        clientInfo?.languages ? JSON.stringify(clientInfo.languages) : null,
+        clientInfo?.screenResolution || null,
+        clientInfo?.viewportSize || null,
+        clientInfo?.timezone || null,
+        clientInfo?.platform || null,
+        clientInfo?.cookieEnabled || null,
+        clientInfo?.doNotTrack || null
+      ]);
+
+      // Log successful login
+      await logActivity({
+        userId: user.id,
+        username: user.email,
+        activityType: 'LOGIN_SUCCESS',
+        activityDescription: `User logged in successfully via Supabase`,
+        ipAddress: ipAddress,
+        userAgent: userAgent,
+        success: true,
+        clientInfo: clientInfo || {},
+        responseData: { sessionId: sessionResult.rows[0].id }
+      });
+
+      // Return Supabase session data
+      return res.json({ 
+        message: 'Logged in', 
+        user: { id: user.id, username: user.email, role: user.role },
+        session: data.session
+      });
+    } catch (err) {
+      await logActivity({
+        userId: null,
+        username: email || username,
+        activityType: 'LOGIN_ERROR',
+        activityDescription: `System error during Supabase login`,
+        ipAddress: ipAddress,
+        userAgent: userAgent,
+        success: false,
+        errorCode: 'SYS_001',
+        errorMessage: err.message,
+        clientInfo: clientInfo || {}
+      });
+
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // Original session-based auth for development
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     const user = rows[0];
@@ -103,10 +206,49 @@ const login = async (req, res) => {
 
 // Logout controller
 const logout = async (req, res) => {
-  const user = req.session?.user;
+  const user = req.session?.user || req.user;
   const ipAddress = getClientIp(req);
   const userAgent = req.headers['user-agent'];
 
+  // Use Supabase Auth if enabled
+  if (useSupabase) {
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        await supabaseAuthService.signOut(token);
+      }
+
+      if (user) {
+        // Update session record with logout time
+        await pool.query(`
+          UPDATE user_sessions
+          SET logout_time = NOW(),
+              session_duration = EXTRACT(EPOCH FROM (NOW() - login_time))::INTEGER,
+              is_active = false
+          WHERE user_id = $1 AND is_active = true
+        `, [user.id]);
+
+        // Log logout
+        await logActivity({
+          userId: user.id,
+          username: user.username || user.email,
+          activityType: 'LOGOUT',
+          activityDescription: `User logged out via Supabase`,
+          ipAddress: ipAddress,
+          userAgent: userAgent,
+          success: true
+        });
+      }
+
+      return res.json({ message: 'Logged out' });
+    } catch (err) {
+      console.error('[LOGOUT] Error during Supabase logout:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // Original session-based logout for development
   if (user) {
     try {
       // Update session record with logout time

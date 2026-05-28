@@ -1,14 +1,16 @@
 const isProduction = process.env.NODE_ENV === 'production';
+const useSupabase = process.env.USE_SUPABASE === 'true' || isProduction;
 
 let db;
-if (!isProduction) {
+let pool;
+if (!useSupabase) {
   // SQLite for development
   const { db: sqliteDb } = require('../config/database');
   db = sqliteDb;
 } else {
-  // PostgreSQL for production
-  const { pool } = require('../config/database');
-  db = pool;
+  // PostgreSQL/Supabase for production
+  const { pool: pgPool } = require('../config/database');
+  pool = pgPool;
 }
 
 // Database table normalization function
@@ -144,7 +146,13 @@ const ensureTable = async (key, sampleRow) => {
 // Initialize core database tables
 const initializeTables = async () => {
   try {
-    if (!isProduction) {
+    // Skip initialization if using Supabase (migration already run)
+    if (useSupabase) {
+      console.log('[DB_INIT] Using Supabase - skipping local table initialization (migration already run)');
+      return;
+    }
+
+    if (!useSupabase) {
       // SQLite table creation
       const sqliteTables = [
         `CREATE TABLE IF NOT EXISTS users (

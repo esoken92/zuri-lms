@@ -13,7 +13,7 @@ const { pool } = require('./config/database');
 // Import middleware
 const { requireLogin } = require('./middleware/auth');
 const { errorHandler } = require('./middleware/errorHandler');
-const upload = require('./middleware/upload');
+const { handleUpload } = require('./middleware/upload');
 
 // Developer mode config
 const { isDeveloperMode } = require('./config/developerMode');
@@ -102,7 +102,7 @@ app.get('/api/developer-mode', (req, res) => {
 });
 
 // File upload route
-app.post('/upload', requireLogin, upload.single('photo'), (req, res) => {
+app.post('/upload', requireLogin, handleUpload, (req, res) => {
   const time = new Date().toISOString();
   if (!req.file) {
     const msg = `No file received`;
@@ -117,6 +117,8 @@ app.post('/upload', requireLogin, upload.single('photo'), (req, res) => {
   }
 
   try {
+    const useSupabase = process.env.USE_SUPABASE === 'true' || process.env.NODE_ENV === 'production';
+    const filePath = useSupabase ? req.file.supabaseUrl : `/uploads/${req.file.filename}`;
     const msg = `Received file ${req.file.originalname} -> ${req.file.filename} (${req.file.size} bytes)`;
     console.log(`[UPLOAD] ${time} - ${msg}`);
     logActivity(req, {
@@ -125,7 +127,7 @@ app.post('/upload', requireLogin, upload.single('photo'), (req, res) => {
       request_data: { filename: req.file.originalname, size: req.file.size, path: req.file.filename },
       success: true
     });
-    return res.json({ path: `/uploads/${req.file.filename}` });
+    return res.json({ path: filePath });
   } catch (err) {
     const msg = `Error saving file: ${err.message}`;
     console.error(`[UPLOAD] ${time} - ${msg}`);

@@ -2,14 +2,19 @@ const { pool, db } = require('../config/database');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure logs directory exists
+const isProduction = process.env.NODE_ENV === 'production';
+const useSupabase = process.env.USE_SUPABASE === 'true' || isProduction;
+
+// Ensure logs directory exists (only for local development)
 const logsDir = path.join(__dirname, '../../logs');
-if (!fs.existsSync(logsDir)) {
+if (!isProduction && !fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-// File logging function
+// File logging function (local development only)
 const logToFile = (username, message) => {
+  if (isProduction) return; // Skip file logging in production/serverless
+
   const timestamp = new Date().toISOString();
   const logEntry = `[${timestamp}] ${username || 'SYSTEM'}: ${message}\n`;
 
@@ -21,6 +26,25 @@ const logToFile = (username, message) => {
 
   const logFile = path.join(userLogDir, `${new Date().toISOString().split('T')[0]}.log`);
   fs.appendFileSync(logFile, logEntry);
+};
+
+// Structured logging for Vercel/serverless
+const logToConsole = (level, message, data = {}) => {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level,
+    message,
+    ...data
+  };
+  
+  if (level === 'error') {
+    console.error(JSON.stringify(logEntry));
+  } else if (level === 'warn') {
+    console.warn(JSON.stringify(logEntry));
+  } else {
+    console.log(JSON.stringify(logEntry));
+  }
 };
 
 // Activity logging function
@@ -102,9 +126,27 @@ const logActivity = async (...args) => {
 
     // If we reach here, DB wasn't available or both inserts failed — log to file as a safe fallback
     try {
-      logToFile(activityRecord.username, activityRecord.activity_description || JSON.stringify(activityRecord));
+      if (isProduction) {
+        // Use structured console logging in production
+        logToConsole(
+          activityRecord.success ? 'info' : 'error',
+          activityRecord.activity_description || 'Activity logged',
+          {
+            username: activityRecord.username,
+            activity_type: activityRecord.activity_type,
+            table_name: activityRecord.table_name,
+            record_id: activityRecord.record_id,
+            ip_address: activityRecord.ip_address,
+            success: activityRecord.success,
+            error_code: activityRecord.error_code
+          }
+        );
+      } else {
+        // Use file logging in development
+        logToFile(activityRecord.username, activityRecord.activity_description || JSON.stringify(activityRecord));
+      }
     } catch (fileErr) {
-      console.error('[ACTIVITY_LOG] Fallback file logging failed:', fileErr.message);
+      console.error('[ACTIVITY_LOG] Fallback logging failed:', fileErr.message);
     }
   } catch (err) {
     console.error('[ACTIVITY_LOG] Unexpected error while logging activity:', err.message);
