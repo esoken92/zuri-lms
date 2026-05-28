@@ -22,6 +22,14 @@ export default function SettingsPage() {
   const [file, setFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
   const [importResults, setImportResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null)
+  
+  // Data management state
+  const [viewMode, setViewMode] = useState<'import' | 'view' | 'add'>('import')
+  const [existingData, setExistingData] = useState<any[]>([])
+  const [loadingExistingData, setLoadingExistingData] = useState(false)
+  const [singleEntry, setSingleEntry] = useState<Record<string, string>>({})
+  const [addingEntry, setAddingEntry] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!loading && !user) {
@@ -55,6 +63,198 @@ export default function SettingsPage() {
     setUserData(userRecord)
     setExtendedData(extendedRecord)
     setLoadingData(false)
+  }
+
+  // Check if user has admin/management role
+  const canManageData = () => {
+    return userData?.role === 'admin' || userData?.role === 'management'
+  }
+
+  // Load existing data for selected type
+  const loadExistingData = async () => {
+    setLoadingExistingData(true)
+    try {
+      let tableName = ''
+      switch (selectedType) {
+        case 'companies': tableName = 'companies'; break
+        case 'tyres': tableName = 'tyres'; break
+        case 'depots': tableName = 'depots'; break
+        case 'vehicle-configs': tableName = 'vehicle_configs'; break
+        case 'stores': tableName = 'stores'; break
+        case 'countries': tableName = 'countries'; break
+        case 'provinces': tableName = 'provinces'; break
+        case 'regions': tableName = 'regions'; break
+        case 'scrap_data': tableName = 'scrap_data'; break
+      }
+
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+      setExistingData(data || [])
+    } catch (error) {
+      console.error('Error loading data:', error)
+      setMessage('Failed to load existing data')
+    } finally {
+      setLoadingExistingData(false)
+    }
+  }
+
+  // Load data when type or view mode changes
+  useEffect(() => {
+    if (viewMode === 'view' && canManageData()) {
+      loadExistingData()
+    }
+  }, [selectedType, viewMode])
+
+  // Add single entry
+  const handleAddEntry = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!canManageData()) {
+      setMessage('You do not have permission to manage data')
+      return
+    }
+
+    setAddingEntry(true)
+    setMessage('')
+
+    try {
+      let tableName = ''
+      const entryData: any = {}
+
+      switch (selectedType) {
+        case 'companies':
+          tableName = 'companies'
+          entryData.name = singleEntry.name
+          entryData.contact_person = singleEntry.contact_person || null
+          entryData.email = singleEntry.email || null
+          entryData.phone = singleEntry.phone || null
+          entryData.address = singleEntry.address || null
+          break
+
+        case 'tyres':
+          tableName = 'tyres'
+          entryData.brand = singleEntry.brand
+          entryData.model = singleEntry.model || null
+          entryData.size = singleEntry.size || null
+          entryData.pattern = singleEntry.pattern || null
+          entryData.load_index = singleEntry.load_index || null
+          entryData.speed_rating = singleEntry.speed_rating || null
+          entryData.description = singleEntry.description || null
+          break
+
+        case 'depots':
+          tableName = 'depots'
+          entryData.location = singleEntry.location
+          entryData.company_id = singleEntry.company_id || null
+          entryData.address = singleEntry.address || null
+          entryData.contact_person = singleEntry.contact_person || null
+          entryData.phone = singleEntry.phone || null
+          break
+
+        case 'vehicle-configs':
+          tableName = 'vehicle_configs'
+          entryData.name = singleEntry.name
+          entryData.description = singleEntry.description || null
+          entryData.tire_positions = singleEntry.tire_positions ? JSON.parse(singleEntry.tire_positions) : null
+          entryData.tire_requirements = singleEntry.tire_requirements ? JSON.parse(singleEntry.tire_requirements) : null
+          break
+
+        case 'stores':
+          tableName = 'stores'
+          entryData.name = singleEntry.name
+          entryData.location = singleEntry.location || null
+          entryData.company_id = singleEntry.company_id || null
+          entryData.address = singleEntry.address || null
+          entryData.contact_person = singleEntry.contact_person || null
+          entryData.phone = singleEntry.phone || null
+          break
+
+        case 'countries':
+          tableName = 'countries'
+          entryData.name = singleEntry.name
+          entryData.code = singleEntry.code || null
+          entryData.region = singleEntry.region || null
+          break
+
+        case 'provinces':
+          tableName = 'provinces'
+          entryData.name = singleEntry.name
+          entryData.country_id = singleEntry.country_id || null
+          entryData.code = singleEntry.code || null
+          break
+
+        case 'regions':
+          tableName = 'regions'
+          entryData.name = singleEntry.name
+          entryData.country_id = singleEntry.country_id || null
+          entryData.description = singleEntry.description || null
+          break
+
+        case 'scrap_data':
+          tableName = 'scrap_data'
+          entryData.tyre_id = singleEntry.tyre_id || null
+          entryData.depot_id = singleEntry.depot_id || null
+          entryData.scrap_date = singleEntry.scrap_date || new Date().toISOString()
+          entryData.reason = singleEntry.reason || null
+          entryData.notes = singleEntry.notes || null
+          break
+      }
+
+      const { error } = await supabase.from(tableName).insert(entryData)
+
+      if (error) throw error
+
+      setMessage('Entry added successfully')
+      setSingleEntry({})
+      if (viewMode === 'view') {
+        loadExistingData()
+      }
+    } catch (error) {
+      setMessage('Failed to add entry: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setAddingEntry(false)
+    }
+  }
+
+  // Delete entry
+  const handleDeleteEntry = async (id: string) => {
+    if (!canManageData()) {
+      setMessage('You do not have permission to manage data')
+      return
+    }
+
+    setDeletingId(id)
+    setMessage('')
+
+    try {
+      let tableName = ''
+      switch (selectedType) {
+        case 'companies': tableName = 'companies'; break
+        case 'tyres': tableName = 'tyres'; break
+        case 'depots': tableName = 'depots'; break
+        case 'vehicle-configs': tableName = 'vehicle_configs'; break
+        case 'stores': tableName = 'stores'; break
+        case 'countries': tableName = 'countries'; break
+        case 'provinces': tableName = 'provinces'; break
+        case 'regions': tableName = 'regions'; break
+        case 'scrap_data': tableName = 'scrap_data'; break
+      }
+
+      const { error } = await supabase.from(tableName).delete().eq('id', id)
+
+      if (error) throw error
+
+      setMessage('Entry deleted successfully')
+      loadExistingData()
+    } catch (error) {
+      setMessage('Failed to delete entry: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const handleSignOut = async () => {
@@ -540,83 +740,627 @@ export default function SettingsPage() {
       {activeTab === 'data' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Data Management</h2>
-          <p className="text-sm text-gray-600 mb-6">
-            Import data in bulk using CSV or JSON files. This feature is restricted to settings to prevent casual data modifications.
-          </p>
+          
+          {!canManageData() ? (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+              <p className="text-yellow-800">
+                Data management is restricted to admin and management users only.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 mb-6">
+                Import data in bulk, view existing data, or add single entries. This feature is restricted to admin and management users.
+              </p>
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Data Type</label>
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value as DataType)}
-              className="block w-full max-w-md px-3 py-2 border border-gray-300 rounded-md"
-            >
-              <option value="companies">Companies</option>
-              <option value="tyres">Tyres</option>
-              <option value="depots">Depots</option>
-              <option value="vehicle-configs">Vehicle Configurations</option>
-              <option value="stores">Stores</option>
-              <option value="countries">Countries</option>
-              <option value="provinces">Provinces</option>
-              <option value="regions">Regions</option>
-              <option value="scrap_data">Scrap Data</option>
-            </select>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Upload File (CSV or JSON)</label>
-            <input
-              type="file"
-              accept=".csv,.json"
-              onChange={handleFileChange}
-              className="block w-full max-w-md px-3 py-2 border border-gray-300 rounded-md"
-            />
-            <p className="mt-2 text-sm text-gray-500">
-              Upload a CSV or JSON file with the data to import. Download a template to see the required format.
-            </p>
-          </div>
-
-          <div className="flex gap-3 mb-6">
-            <button
-              onClick={downloadTemplate}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-            >
-              Download Template
-            </button>
-            <button
-              onClick={importData}
-              disabled={!file || importing}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {importing ? 'Importing...' : 'Import Data'}
-            </button>
-          </div>
-
-          {importResults && (
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Import Results</h3>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="bg-green-50 p-4 rounded">
-                  <div className="text-green-800 font-medium">Successful</div>
-                  <div className="text-2xl font-bold text-green-900">{importResults.success}</div>
-                </div>
-                <div className="bg-red-50 p-4 rounded">
-                  <div className="text-red-800 font-medium">Failed</div>
-                  <div className="text-2xl font-bold text-red-900">{importResults.failed}</div>
+              {/* Mode Selector */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Mode</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setViewMode('import')}
+                    className={`px-4 py-2 rounded-md ${
+                      viewMode === 'import'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    Bulk Import
+                  </button>
+                  <button
+                    onClick={() => setViewMode('view')}
+                    className={`px-4 py-2 rounded-md ${
+                      viewMode === 'view'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    View Existing
+                  </button>
+                  <button
+                    onClick={() => setViewMode('add')}
+                    className={`px-4 py-2 rounded-md ${
+                      viewMode === 'add'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    Add Single Entry
+                  </button>
                 </div>
               </div>
 
-              {importResults.errors.length > 0 && (
-                <div className="bg-red-50 p-4 rounded">
-                  <h4 className="font-medium text-red-800 mb-2">Errors</h4>
-                  <ul className="text-sm text-red-700 space-y-1 max-h-60 overflow-y-auto">
-                    {importResults.errors.map((error, index) => (
-                      <li key={index}>{error}</li>
-                    ))}
-                  </ul>
-                </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Data Type</label>
+                <select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value as DataType)}
+                  className="block w-full max-w-md px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="companies">Companies</option>
+                  <option value="tyres">Tyres</option>
+                  <option value="depots">Depots</option>
+                  <option value="vehicle-configs">Vehicle Configurations</option>
+                  <option value="stores">Stores</option>
+                  <option value="countries">Countries</option>
+                  <option value="provinces">Provinces</option>
+                  <option value="regions">Regions</option>
+                  <option value="scrap_data">Scrap Data</option>
+                </select>
+              </div>
+
+              {/* Import Mode */}
+              {viewMode === 'import' && (
+                <>
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Upload File (CSV or JSON)</label>
+                    <input
+                      type="file"
+                      accept=".csv,.json"
+                      onChange={handleFileChange}
+                      className="block w-full max-w-md px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                    <p className="mt-2 text-sm text-gray-500">
+                      Upload a CSV or JSON file with the data to import. Download a template to see the required format.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3 mb-6">
+                    <button
+                      onClick={downloadTemplate}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                    >
+                      Download Template
+                    </button>
+                    <button
+                      onClick={importData}
+                      disabled={!file || importing}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {importing ? 'Importing...' : 'Import Data'}
+                    </button>
+                  </div>
+
+                  {importResults && (
+                    <div className="border-t pt-6">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Import Results</h3>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-green-50 p-4 rounded">
+                          <div className="text-green-800 font-medium">Successful</div>
+                          <div className="text-2xl font-bold text-green-900">{importResults.success}</div>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded">
+                          <div className="text-red-800 font-medium">Failed</div>
+                          <div className="text-2xl font-bold text-red-900">{importResults.failed}</div>
+                        </div>
+                      </div>
+
+                      {importResults.errors.length > 0 && (
+                        <div className="bg-red-50 p-4 rounded">
+                          <h4 className="font-medium text-red-800 mb-2">Errors</h4>
+                          <ul className="text-sm text-red-700 space-y-1 max-h-60 overflow-y-auto">
+                            {importResults.errors.map((error, index) => (
+                              <li key={index}>{error}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
-            </div>
+
+              {/* View Mode */}
+              {viewMode === 'view' && (
+                <>
+                  {loadingExistingData ? (
+                    <div className="text-gray-500">Loading data...</div>
+                  ) : existingData.length === 0 ? (
+                    <div className="text-gray-500">No data found for this type.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            {Object.keys(existingData[0] || {})
+                              .filter(key => key !== 'created_at' && key !== 'updated_at')
+                              .slice(0, 5)
+                              .map(key => (
+                                <th key={key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  {key}
+                                </th>
+                              ))}
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {existingData.map((item) => (
+                            <tr key={item.id}>
+                              {Object.keys(item)
+                                .filter(key => key !== 'created_at' && key !== 'updated_at' && key !== 'id')
+                                .slice(0, 5)
+                                .map(key => (
+                                  <td key={key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {String(item[key] || '-')}
+                                  </td>
+                                ))}
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                  onClick={() => handleDeleteEntry(item.id)}
+                                  disabled={deletingId === item.id}
+                                  className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                                >
+                                  {deletingId === item.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Add Single Entry Mode */}
+              {viewMode === 'add' && (
+                <form onSubmit={handleAddEntry} className="space-y-4 max-w-2xl">
+                  {selectedType === 'companies' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={singleEntry.name || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, name: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Contact Person</label>
+                        <input
+                          type="text"
+                          value={singleEntry.contact_person || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, contact_person: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Email</label>
+                        <input
+                          type="email"
+                          value={singleEntry.email || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, email: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Phone</label>
+                        <input
+                          type="tel"
+                          value={singleEntry.phone || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, phone: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Address</label>
+                        <input
+                          type="text"
+                          value={singleEntry.address || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, address: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedType === 'tyres' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Brand *</label>
+                        <input
+                          type="text"
+                          required
+                          value={singleEntry.brand || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, brand: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Model</label>
+                        <input
+                          type="text"
+                          value={singleEntry.model || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, model: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Size</label>
+                        <input
+                          type="text"
+                          value={singleEntry.size || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, size: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Pattern</label>
+                        <input
+                          type="text"
+                          value={singleEntry.pattern || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, pattern: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Load Index</label>
+                        <input
+                          type="text"
+                          value={singleEntry.load_index || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, load_index: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Speed Rating</label>
+                        <input
+                          type="text"
+                          value={singleEntry.speed_rating || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, speed_rating: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea
+                          value={singleEntry.description || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, description: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                          rows={3}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedType === 'depots' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Location *</label>
+                        <input
+                          type="text"
+                          required
+                          value={singleEntry.location || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, location: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Company ID</label>
+                        <input
+                          type="text"
+                          value={singleEntry.company_id || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, company_id: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Address</label>
+                        <input
+                          type="text"
+                          value={singleEntry.address || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, address: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Contact Person</label>
+                        <input
+                          type="text"
+                          value={singleEntry.contact_person || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, contact_person: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Phone</label>
+                        <input
+                          type="tel"
+                          value={singleEntry.phone || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, phone: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedType === 'vehicle-configs' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={singleEntry.name || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, name: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea
+                          value={singleEntry.description || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, description: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                          rows={3}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tire Positions (JSON)</label>
+                        <textarea
+                          value={singleEntry.tire_positions || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, tire_positions: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                          rows={3}
+                          placeholder='[{"position":1,"size":"205/55R16"}]'
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tire Requirements (JSON)</label>
+                        <textarea
+                          value={singleEntry.tire_requirements || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, tire_requirements: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                          rows={3}
+                          placeholder='[{"min_tread":3}]'
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedType === 'stores' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={singleEntry.name || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, name: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Location</label>
+                        <input
+                          type="text"
+                          value={singleEntry.location || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, location: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Company ID</label>
+                        <input
+                          type="text"
+                          value={singleEntry.company_id || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, company_id: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Address</label>
+                        <input
+                          type="text"
+                          value={singleEntry.address || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, address: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Contact Person</label>
+                        <input
+                          type="text"
+                          value={singleEntry.contact_person || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, contact_person: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Phone</label>
+                        <input
+                          type="tel"
+                          value={singleEntry.phone || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, phone: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedType === 'countries' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={singleEntry.name || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, name: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Code</label>
+                        <input
+                          type="text"
+                          value={singleEntry.code || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, code: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Region</label>
+                        <input
+                          type="text"
+                          value={singleEntry.region || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, region: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedType === 'provinces' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={singleEntry.name || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, name: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Country ID</label>
+                        <input
+                          type="text"
+                          value={singleEntry.country_id || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, country_id: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Code</label>
+                        <input
+                          type="text"
+                          value={singleEntry.code || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, code: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedType === 'regions' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={singleEntry.name || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, name: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Country ID</label>
+                        <input
+                          type="text"
+                          value={singleEntry.country_id || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, country_id: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Description</label>
+                        <textarea
+                          value={singleEntry.description || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, description: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                          rows={3}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {selectedType === 'scrap_data' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tyre ID</label>
+                        <input
+                          type="text"
+                          value={singleEntry.tyre_id || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, tyre_id: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Depot ID</label>
+                        <input
+                          type="text"
+                          value={singleEntry.depot_id || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, depot_id: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Scrap Date</label>
+                        <input
+                          type="date"
+                          value={singleEntry.scrap_date || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, scrap_date: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Reason</label>
+                        <input
+                          type="text"
+                          value={singleEntry.reason || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, reason: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Notes</label>
+                        <textarea
+                          value={singleEntry.notes || ''}
+                          onChange={(e) => setSingleEntry({...singleEntry, notes: e.target.value})}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                          rows={3}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={addingEntry}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {addingEntry ? 'Adding...' : 'Add Entry'}
+                  </button>
+                </form>
+              )}
+            </>
           )}
         </div>
       )}
