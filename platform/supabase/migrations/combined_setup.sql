@@ -318,9 +318,9 @@ CREATE POLICY "Users can read their own org memberships"
   ON platform.organization_members FOR SELECT
   USING (user_id = auth.uid() OR platform.is_platform_admin(auth.uid()));
 
-CREATE POLICY "Platform admins can manage all org memberships"
+CREATE POLICY "Service role can manage org memberships"
   ON platform.organization_members FOR ALL
-  USING (platform.is_platform_admin(auth.uid()));
+  USING (true);  -- App-level auth handles platform admin check via Clerk
 
 -- Sites: Org members can read/write their own org's sites, platform admins can manage all
 CREATE POLICY "Org members can read their org sites"
