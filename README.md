@@ -70,6 +70,10 @@ cp .env.example .env.local   # fill in your project URL + keys
 npm run dev                  # http://localhost:3000
 ```
 
+Requires **Node 20.9+** (24 LTS recommended). Constrained box? Next's
+build fits comfortably in a few GB — cap Node's heap explicitly if needed:
+`NODE_OPTIONS=--max-old-space-size=4096 npm run build`.
+
 ### 3 — Demo accounts (optional)
 
 ```bash
