@@ -1,4 +1,10 @@
+<div align="center">
+
+<img src="public/logo.svg" alt="Zuri LMS" width="240" />
+
 # Zuri LMS — Community Edition
+
+</div>
 
 **Open-source tyre inspection and fleet logistics for small fleets — self-hosted, MIT licensed, no telemetry.**
 

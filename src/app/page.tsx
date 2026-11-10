@@ -35,8 +35,14 @@ export default function Home() {
   return (
     <div className="flex flex-1 flex-col bg-hot-curry-50 text-hot-curry-950">
       <header className="flex items-center justify-between border-b border-hot-curry-200 bg-white/80 px-6 py-4 backdrop-blur">
-        <span className="flex items-center gap-2 text-lg font-bold tracking-tight">
-          <span className="inline-block h-3 w-3 rounded-sm bg-hot-curry-600" />
+        <span className="flex items-center gap-2.5 text-lg font-bold tracking-tight">
+          <svg viewBox="0 0 64 64" className="h-7 w-7" aria-hidden="true">
+            <rect width="64" height="64" rx="14" fill="#724b1a" />
+            <path
+              d="M16 18h32v5l-20 18h20v5H16v-5l20-18H16Z"
+              fill="#fdf6f2"
+            />
+          </svg>
           Zuri LMS
         </span>
         <nav className="flex items-center gap-2">
