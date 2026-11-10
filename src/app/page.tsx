@@ -31,9 +31,30 @@ const FEATURES = [
   },
 ];
 
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  name: "Zuri LMS — Community Edition",
+  description:
+    "Self-hosted tyre inspection and fleet logistics for small fleets. MIT licensed.",
+  codeRepository: "https://github.com/esoken92/zuri-lms",
+  license: "https://opensource.org/licenses/MIT",
+  programmingLanguage: "TypeScript",
+  runtimePlatform: "Node.js",
+  author: {
+    "@type": "Person",
+    name: "Kurt Jonathan",
+    url: "https://github.com/esoken92",
+  },
+};
+
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col bg-hot-curry-50 text-hot-curry-950">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
       <header className="flex items-center justify-between border-b border-hot-curry-200 bg-white/80 px-6 py-4 backdrop-blur">
         <span className="flex items-center gap-2.5 text-lg font-bold tracking-tight">
           <svg viewBox="0 0 64 64" className="h-7 w-7" aria-hidden="true">

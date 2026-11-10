@@ -28,6 +28,7 @@ export const metadata: Metadata = {
     template: "%s · Zuri LMS",
   },
   description: DESCRIPTION,
+  alternates: { canonical: "/" },
   keywords: [
     "tyre inspection",
     "fleet logistics",

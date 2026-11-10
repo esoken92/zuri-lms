@@ -1,0 +1,26 @@
+# Zuri LMS — Community Edition
+
+> Self-hosted tyre inspection and fleet logistics for small fleets.
+> Open source, MIT licensed, no telemetry. This site is the marketing page —
+> the application source, docs and schema live on GitHub.
+
+## Links
+
+- Source code: https://github.com/esoken92/zuri-lms
+- Quickstart: https://github.com/esoken92/zuri-lms#quickstart
+- Release roadmap (shipped / deferred / out of scope):
+  https://github.com/esoken92/zuri-lms/blob/main/docs/ROADMAP.md
+- Environment setup: https://github.com/esoken92/zuri-lms/blob/main/.env.example
+- Database migrations: https://github.com/esoken92/zuri-lms/tree/main/supabase/migrations
+
+## What it is
+
+Next.js 16 + React 19 + Supabase (Postgres, Auth, RLS). Features:
+tyre inspections, scrap/write-off tracking, reports & analytics, BLE tyre
+sensor reads, role-based access (admin/manager/inspector), approval
+workflow, offline inspection drafts.
+
+To run it, a cloner supplies their own Supabase project and sets
+NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY /
+SUPABASE_SERVICE_ROLE_KEY (server-only). Demo accounts via
+`NEXT_PUBLIC_DEMO_MODE` + `scripts/create-demo-users.mjs`.
