@@ -3,8 +3,16 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface VehicleConfigRow {
+  id: string
+  item_code: string
+  name: string
+  tire_config: unknown
+  spares?: number | null
+}
+
 export default function VehicleConfigsPage() {
-  const [configs, setConfigs] = useState<any[]>([])
+  const [configs, setConfigs] = useState<VehicleConfigRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
 
@@ -24,7 +32,11 @@ export default function VehicleConfigsPage() {
   }
 
   useEffect(() => {
-    loadConfigs()
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadConfigs()
+    })
   }, [])
 
   if (showForm) {

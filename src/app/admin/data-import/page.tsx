@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
+type ImportType = 'companies' | 'tyres' | 'depots' | 'vehicle-configs'
+
 export default function DataImportPage() {
-  const [selectedType, setSelectedType] = useState<'companies' | 'tyres' | 'depots' | 'vehicle-configs'>('companies')
+  const [selectedType, setSelectedType] = useState<ImportType>('companies')
   const [file, setFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
   const [results, setResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null)
@@ -16,15 +18,15 @@ export default function DataImportPage() {
     }
   }
 
-  const parseCSV = (text: string): any[] => {
+  const parseCSV = (text: string): Record<string, string>[] => {
     const lines = text.split('\n')
     const headers = lines[0].split(',').map(h => h.trim())
-    const data = []
+    const data: Record<string, string>[] = []
 
     for (let i = 1; i < lines.length; i++) {
       if (lines[i].trim()) {
         const values = lines[i].split(',').map(v => v.trim())
-        const obj: any = {}
+        const obj: Record<string, string> = {}
         headers.forEach((header, index) => {
           obj[header] = values[index] || ''
         })
@@ -35,9 +37,9 @@ export default function DataImportPage() {
     return data
   }
 
-  const parseJSON = (text: string): any[] => {
+  const parseJSON = (text: string): Record<string, string>[] => {
     try {
-      const parsed = JSON.parse(text)
+      const parsed = JSON.parse(text) as Record<string, string> | Record<string, string>[]
       return Array.isArray(parsed) ? parsed : [parsed]
     } catch {
       return []
@@ -52,7 +54,7 @@ export default function DataImportPage() {
 
     try {
       const text = await file.text()
-      let data: any[] = []
+      let data: Record<string, string>[] = []
 
       if (file.name.endsWith('.csv')) {
         data = parseCSV(text)
@@ -171,7 +173,7 @@ export default function DataImportPage() {
           <label className="block text-sm font-medium text-gray-700 mb-2">Data Type</label>
           <select
             value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value as any)}
+            onChange={(e) => setSelectedType(e.target.value as ImportType)}
             className="block w-full px-3 py-2 border border-gray-300 rounded-md"
           >
             <option value="companies">Companies</option>

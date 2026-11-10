@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { hashString } from '@/lib/crypto'
 import { useToast, ToastContainer } from '@/components/ui/Toast'
+import { Country, Province, Region, Store } from '@/types'
 
 interface UserFormProps {
   onCancel: () => void
@@ -33,24 +34,10 @@ export default function UserForm({ onCancel, onSuccess }: UserFormProps) {
     security_answer_2: ''
   })
 
-  const [countries, setCountries] = useState<any[]>([])
-  const [provinces, setProvinces] = useState<any[]>([])
-  const [regions, setRegions] = useState<any[]>([])
-  const [stores, setStores] = useState<any[]>([])
-
-  useEffect(() => {
-    loadGeographicData()
-  }, [])
-
-  useEffect(() => {
-    if (formData.country_id) {
-      loadProvinces(formData.country_id)
-      loadStores(formData.country_id)
-    } else {
-      setProvinces([])
-      setStores([])
-    }
-  }, [formData.country_id])
+  const [countries, setCountries] = useState<Country[]>([])
+  const [provinces, setProvinces] = useState<Province[]>([])
+  const [regions, setRegions] = useState<Region[]>([])
+  const [stores, setStores] = useState<Store[]>([])
 
   const loadGeographicData = async () => {
     const [countriesData, regionsData, storesData] = await Promise.all([
@@ -73,6 +60,28 @@ export default function UserForm({ onCancel, onSuccess }: UserFormProps) {
     const { data } = await supabase.from('stores').select('*').eq('country_id', countryId).eq('is_active', true)
     setStores(data || [])
   }
+
+  useEffect(() => {
+    // Mount-only data load; deferred so state updates run after the effect.
+    queueMicrotask(() => {
+      void loadGeographicData()
+    })
+  }, [])
+
+  useEffect(() => {
+    // Deferred so the loads/resets run after the effect, not inside it.
+    if (formData.country_id) {
+      queueMicrotask(() => {
+        void loadProvinces(formData.country_id)
+        void loadStores(formData.country_id)
+      })
+    } else {
+      queueMicrotask(() => {
+        setProvinces([])
+        setStores([])
+      })
+    }
+  }, [formData.country_id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -299,8 +308,8 @@ export default function UserForm({ onCancel, onSuccess }: UserFormProps) {
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
               >
                 <option value="">Select Question</option>
-                <option value="What was your first pet's name?">What was your first pet's name?</option>
-                <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+                <option value="What was your first pet's name?">What was your first pet&apos;s name?</option>
+                <option value="What is your mother's maiden name?">What is your mother&apos;s maiden name?</option>
                 <option value="What city were you born in?">What city were you born in?</option>
               </select>
             </div>

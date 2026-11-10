@@ -1,205 +1,113 @@
-# ZURI_LMS – Logistics Management System (Proprietary)
+# Zuri LMS — Community Edition
 
-**ZURI_LMS** is a private, enterprise-grade Logistics Company Management System designed for transport fleets, tire management businesses, and logistics service providers. It integrates critical operations like inspections, stock control, reporting, and future modules for freight, scheduling, and analytics.
+**Open-source tyre inspection and fleet logistics for small fleets — self-hosted, MIT licensed, no telemetry.**
 
-## 📂 Project Structure
+This is a slice of the full Zuri platform: the parts a depot actually needs
+day to day, packaged so anyone can clone it, point it at a free Supabase
+project, and run it for real. If the mini covers your fleet, you never
+needed the rest.
 
-```
-Zuri/
-├── client/              # React frontend
-│   ├── src/             # Source files
-│   ├── public/          # Static assets
-│   └── package.json
-│
-├── server/              # Express.js backend
-│   ├── server.js        # Main server
-│   ├── logs/            # Per-user activity logs (auto-created)
-│   ├── uploads/         # User-uploaded files
-│   ├── package.json
-│   └── README.md        # Server documentation
-│
-├── Dummy Data/          # Test data and components
-└── README.md            # This file
-```
+## Screenshots
 
----
+| Landing | Sign in | Register |
+|---|---|---|
+| ![Landing](public/screenshots/landing.png) | ![Sign in](public/screenshots/login.png) | ![Register](public/screenshots/register.png) |
+| Public marketing front | Supabase auth + approval gate | SADC-first geographic profile fields |
 
-## 🔧 Core Modules (Current & Planned)
+> Dashboard, inspections, admin and report screens render once the app is
+> pointed at your own Supabase project — they're not screenshotted here
+> because no demo backend ships with the repo. `npm run dev` +
+> `scripts/create-demo-users.mjs` gets you the full tour in ~10 minutes.
 
-- ✅ Tire Inspection & Condition Logging
-- ✅ Stock Management (Tyres, Tools, Parts)
-- ✅ Bluetooth LE Integration for Sensor Readings
-- ✅ Photo Capture & Storage
-- ✅ User Roles: Admin, Inspector, Manager
-- 🔄 Offline Syncing & Cloud Backup
-- 📋 Inspection Reporting & PDF Exports
-- 📦 Dispatch Tracking & Vehicle Assignment (Coming Soon)
-- 📊 Fleet Health Dashboards & Analytics (Planned)
-- 🌐 Multi-Company & Multi-Depot Support (Planned)
+## Features
 
----
+- **Tyre inspections** — per-position condition logging, photo capture,
+  draft auto-save
+- **Scrap tracking** — write-offs with reason codes and evidence
+- **Reports & analytics** — inspection history, scrap trends, condition
+  views per vehicle and depot
+- **Roles & approvals** — admin / manager / inspector; sign-ups require
+  admin approval; Postgres RLS enforces every table
+- **Admin panel** — users, companies, depots, vehicle configs, tyre
+  register, data import, activity logs
+- **Bluetooth sensors** — Web Bluetooth tyre-sensor reads straight into
+  the inspection form (Chrome/Edge)
+- **Offline drafts** — inspections survive a dropped connection and sync
+  on reconnect
+- **Demo mode** — seeded accounts behind `NEXT_PUBLIC_DEMO_MODE`
 
-## 📜 Recent Changes & Documentation
+**Deliberately not here:** multi-tenant org switching, billing, gate
+passes, waybills, access control — those live in the commercial platform.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the full shipped-vs-deferred
+accounting.
 
-### v2.0 - Complete Backend Overhaul (December 2025)
+## Stack
 
-**Per-User Persistent Logging System**
-- ✅ Implemented per-user file-based logging (replaces session-based)
-- ✅ Logs stored in `server/logs/{username}/activity_YYYY-MM-DD.log`
-- ✅ All requests, responses, and errors automatically captured
-- ✅ Unauthenticated requests logged as 'anonymous'
-- 📖 See: [server/LOGGING.md](./Zuri/server/LOGGING.md) for detailed logging guide
+Next.js 16 · React 19 · Tailwind CSS 4 · TypeScript strict ·
+Supabase (Auth + Postgres + RLS) · Recharts · Web Bluetooth ·
+service-worker-free, no tracking anywhere.
 
-**Backend Fixes & Improvements**
-- ✅ Fixed FormData upload hanging (removed manual Content-Type header)
-- ✅ Added `/upload` endpoint with multer file storage
-- ✅ Added `/inspections` endpoint with PostgreSQL integration
-- ✅ Implemented camelCase → snake_case column normalization
-- ✅ Added dynamic table creation and ALTER TABLE logic
-- ✅ Added request/response logging middleware
-- ✅ Added centralized error handler
-- ✅ Added PostgreSQL connectivity check at startup
-- ✅ Environment variable support (.env configuration)
+## Quickstart
 
-**Route Restructuring (Frontend)**
-- ✅ Dashboard now default page at "/"
-- ✅ Inspection Form moved to "/inspections"
-- ✅ Reports at "/reports"
-- ✅ Admin Dashboard at "/admin-dashboard"
-- ✅ User Settings at "/settings"
+### 1 — Supabase
 
-**Documentation**
-- 📖 [server/README.md](./Zuri/server/README.md) - Complete backend API and setup guide
-- 📖 [server/LOGGING.md](./Zuri/server/LOGGING.md) - Detailed logging system documentation
-- 📖 [LOGGING_MIGRATION_COMPLETE.md](./Zuri/LOGGING_MIGRATION_COMPLETE.md) - Migration completion report
+Create a free project at [supabase.com](https://supabase.com) (or use a
+self-hosted Supabase), then apply the schema:
 
-### Migration Summary
-
-| Component | Before | After | Status |
-|-----------|--------|-------|--------|
-| Logging | Session-based (ephemeral) | Per-user persistent files | ✅ |
-| Uploads | 500 errors, hanging | Working with multer | ✅ |
-| DB Schema | Manual column management | Auto-created with ALTER TABLE | ✅ |
-| Routes | Inspections at "/" | Dashboard at "/", Inspections at "/inspections" | ✅ |
-| Error Handling | No centralized handler | Centralized JSON error responses | ✅ |
-| Startup Check | No DB verification | PostgreSQL connectivity verified on boot | ✅ |
-
----
-
-## 🚀 Quick Setup
-
-### Prerequisites
-- Node.js 18+ ([Download](https://nodejs.org/))
-- PostgreSQL 12+ ([Download](https://www.postgresql.org/download/))
-- Git ([Download](https://git-scm.com/))
-
-### Backend Setup
 ```bash
-cd Zuri/server
-npm install
-
-# Copy environment file and configure
-cp .env.example .env
-# Edit .env with your database credentials
-
-# Seed development data (optional)
-npm run seed:dev
-
-# Start server
-npm run dev  # Development mode with auto-restart
-# or
-npm start    # Production mode
+# easiest: paste supabase/migrations/*.sql in order into the SQL editor,
+# or use the Supabase CLI:
+supabase db push
+# optional demo/reference data (countries, provinces, sample companies):
+#   run supabase/seed.sql then supabase/seed_geographic.sql
 ```
 
-Server runs at: `http://localhost:5000`
+### 2 — App
 
-### Frontend Setup
 ```bash
-cd Zuri/client
 npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Start development server
-npm start
+cp .env.example .env.local   # fill in your project URL + keys
+npm run dev                  # http://localhost:3000
 ```
 
-Client runs at: `http://localhost:3000`
+### 3 — Demo accounts (optional)
 
-### Database Setup
-1. Create PostgreSQL database: `zuri_lms`
-2. Update `.env` files with your database credentials
-3. Tables are created automatically on first run
-
-### Development Accounts
-After running `npm run seed:dev`, use these test accounts:
-- **admin** / admin123 (Administrator)
-- **inspector** / inspect123 (Inspector)
-- **manager** / manage123 (Group Manager)
-
----
-
-## 📚 Documentation
-
-- **[API Documentation](./Zuri/server/docs/api.md)** - Complete API reference
-- **[Server Guide](./Zuri/server/README.md)** - Backend setup and configuration
-- **[Logging System](./Zuri/server/LOGGING.md)** - Activity logging details
-- **[Testing Guide](./Zuri/server/VERIFICATION_TESTING.md)** - Testing procedures
-
-- **[server/README.md](./Zuri/server/README.md)** - Backend setup, API endpoints, configuration
-- **[server/LOGGING.md](./Zuri/server/LOGGING.md)** - Logging system architecture and usage
-- **[server/VERIFICATION_TESTING.md](./Zuri/server/VERIFICATION_TESTING.md)** - Comprehensive testing procedures
-- **[server/TEST_QUICK_REFERENCE.md](./Zuri/server/TEST_QUICK_REFERENCE.md)** - Quick test commands
-- **[LOGGING_MIGRATION_COMPLETE.md](./Zuri/LOGGING_MIGRATION_COMPLETE.md)** - Migration completion details
-- **[CHANGES_DOCUMENTATION.md](./ZURI/CHANGES_DOCUMENTATION.md)** - Complete change log
-
----
-
-## 🔧 Environment Configuration
-
-Create `.env` files in both `server/` and `client/` directories:
-
-**server/.env**
-```env
-PORT=5000
-NODE_ENV=development
-PGHOST=localhost
-PGPORT=54321
-PGUSER=postgres
-PGPASSWORD=your_password
-PGDATABASE=zuri
-SESSION_SECRET=your_secret_key_here
+```bash
+node scripts/create-demo-users.mjs
 ```
 
-**client/.env**
-```env
-REACT_APP_API_URL=http://localhost:5000
+Sign in at `/login` — the demo hint box appears because
+`NEXT_PUBLIC_DEMO_MODE=true` in `.env.example`. Disable it for anything
+real.
+
+## Repo layout
+
+```
+src/app            # Next.js routes — / landing, /login, /dashboard/*, /admin/*
+src/components     # UI + Bluetooth panel
+src/contexts       # auth, bluetooth, connection providers
+src/lib            # supabase clients, offline sync, crypto
+supabase/migrations  # schema, applied in order
+supabase/seed*.sql   # reference + demo seed data
+scripts/           # demo-user provisioning
+docs/              # roadmap, security review
 ```
 
----
+## Security model
 
-## 🔐 Licensing
+- Data isolation is **Postgres RLS** — every table has policies; the app
+  reads/writes as the signed-in user with their role
+- `SUPABASE_SERVICE_ROLE_KEY` is **server-only** (admin API routes +
+  the demo-user script). It never ships to the browser
+- Sign-ups start `pending` — an admin approves from `/admin/users`
+- No secrets in the repo; `.env*` files are gitignored
 
-ZURI_LMS is **proprietary software**.  
-All rights are reserved by the author. The source code and compiled applications may not be used, copied, distributed, or modified without explicit written permission.
+## License
 
-> Unauthorized use or duplication will result in civil and/or criminal penalties under international copyright law.
+[MIT](LICENSE) — use it, fork it, ship it.
 
----
+## Contact
 
-## 📌 Future Plans
+Part of the **[ESO Industries](https://esoind.co.za)** ecosystem.
 
-A **limited open-source community edition** may be released in the future under a permissive license (such as MIT or Apache 2.0). Subscribe or contact us to be notified.
-
----
-
-## 📞 Contact
-
-For demo access, licensing, or partnership opportunities:
-
-**Kurt Jonathan**  
-📧 [esoken92@gmail.com](mailto:esoken92@gmail.com)
-📍 South Africa
-
----
+**Kurt Jonathan** — [esoken92@gmail.com](mailto:esoken92@gmail.com)

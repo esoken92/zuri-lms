@@ -8,8 +8,8 @@ type ConnectionStatus = 'online' | 'offline' | 'slow'
 interface ConnectionContextType {
   status: ConnectionStatus
   isOnline: boolean
-  syncQueue: any[]
-  addToSyncQueue: (data: any) => void
+  syncQueue: Record<string, unknown>[]
+  addToSyncQueue: (data: Record<string, unknown>) => void
   clearSyncQueue: () => void
   syncNow: () => Promise<void>
   isSyncing: boolean
@@ -21,13 +21,34 @@ const ConnectionContext = createContext<ConnectionContextType | undefined>(undef
 export function ConnectionProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<ConnectionStatus>('online')
   const [isOnline, setIsOnline] = useState(true)
-  const [syncQueue, setSyncQueue] = useState<any[]>([])
+  const [syncQueue, setSyncQueue] = useState<Record<string, unknown>[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
   const [lastSynced, setLastSynced] = useState<string | null>(null)
 
+  const syncNow = useCallback(async () => {
+    if (!isOnline || isSyncing || syncQueue.length === 0) return
+
+    setIsSyncing(true)
+    try {
+      const result = await syncData()
+      if (result.success) {
+        setSyncQueue([])
+        setLastSynced(new Date().toISOString())
+      } else {
+        // Update queue with remaining items
+        const remainingQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]') as Record<string, unknown>[]
+        setSyncQueue(remainingQueue)
+      }
+    } catch (error) {
+      console.error('Sync failed:', error)
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [isOnline, isSyncing, syncQueue])
+
   useEffect(() => {
-    // Check initial online status
-    setIsOnline(navigator.onLine)
+    // Sync the initial client-only online status after mount.
+    queueMicrotask(() => setIsOnline(navigator.onLine))
 
     // Listen for online/offline events
     const handleOnline = async () => {
@@ -48,7 +69,7 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
     // Periodic connection check
     const checkConnection = async () => {
       try {
-        const response = await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL!, {
+        await fetch(process.env.NEXT_PUBLIC_SUPABASE_URL!, {
           method: 'HEAD',
           mode: 'no-cors',
           cache: 'no-cache',
@@ -56,7 +77,7 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
         if (isOnline) {
           setStatus('online')
         }
-      } catch (error) {
+      } catch {
         if (isOnline) {
           setStatus('slow')
         }
@@ -70,18 +91,21 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
       window.removeEventListener('offline', handleOffline)
       clearInterval(interval)
     }
-  }, [isOnline])
+  }, [isOnline, syncNow])
 
   // Load sync queue and lastSynced from localStorage on mount
   useEffect(() => {
-    const savedQueue = localStorage.getItem('syncQueue')
-    if (savedQueue) {
-      setSyncQueue(JSON.parse(savedQueue))
-    }
-    const savedLastSynced = localStorage.getItem('lastSynced')
-    if (savedLastSynced) {
-      setLastSynced(savedLastSynced)
-    }
+    // Hydrate client-only persisted state after mount.
+    queueMicrotask(() => {
+      const savedQueue = localStorage.getItem('syncQueue')
+      if (savedQueue) {
+        setSyncQueue(JSON.parse(savedQueue) as Record<string, unknown>[])
+      }
+      const savedLastSynced = localStorage.getItem('lastSynced')
+      if (savedLastSynced) {
+        setLastSynced(savedLastSynced)
+      }
+    })
   }, [])
 
   // Save sync queue to localStorage whenever it changes
@@ -107,30 +131,9 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
     }, 60000) // Sync every 60 seconds
 
     return () => clearInterval(autoSyncInterval)
-  }, [isOnline, syncQueue.length, isSyncing])
+  }, [isOnline, syncQueue.length, isSyncing, syncNow])
 
-  const syncNow = async () => {
-    if (!isOnline || isSyncing || syncQueue.length === 0) return
-
-    setIsSyncing(true)
-    try {
-      const result = await syncData()
-      if (result.success) {
-        setSyncQueue([])
-        setLastSynced(new Date().toISOString())
-      } else {
-        // Update queue with remaining items
-        const remainingQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]')
-        setSyncQueue(remainingQueue)
-      }
-    } catch (error) {
-      console.error('Sync failed:', error)
-    } finally {
-      setIsSyncing(false)
-    }
-  }
-
-  const addToSyncQueue = (data: any) => {
+  const addToSyncQueue = (data: Record<string, unknown>) => {
     setSyncQueue(prev => [...prev, { ...data, timestamp: new Date().toISOString() }])
   }
 

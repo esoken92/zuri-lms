@@ -71,7 +71,7 @@ export interface ActivityLog {
   action: string
   entity_type?: string
   entity_id?: string
-  details?: any
+  details?: Record<string, unknown>
   created_at: string
   users?: {
     username: string

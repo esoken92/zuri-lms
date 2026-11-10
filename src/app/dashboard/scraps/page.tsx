@@ -6,11 +6,17 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useConnection } from '@/contexts/ConnectionContext'
 import { saveToSyncQueue } from '@/lib/offlineSync'
 
+interface ScrapRow {
+  id: string
+  created_at: string
+  user_name: string | null
+  items?: unknown[]
+  status: string | null
+}
+
 export default function ScrapsPage() {
-  const { user } = useAuth()
-  const { isOnline, addToSyncQueue } = useConnection()
   const [showForm, setShowForm] = useState(false)
-  const [scraps, setScraps] = useState<any[]>([])
+  const [scraps, setScraps] = useState<ScrapRow[]>([])
   const [loading, setLoading] = useState(false)
 
   const loadScraps = async () => {
@@ -29,7 +35,11 @@ export default function ScrapsPage() {
   }
 
   useEffect(() => {
-    loadScraps()
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadScraps()
+    })
   }, [])
 
   if (showForm) {
@@ -113,20 +123,37 @@ export default function ScrapsPage() {
   )
 }
 
+interface ScrapItem {
+  id: number
+  location: string
+  damageCode: string
+  damageDescription: string
+  quantity: number
+  notes: string
+}
+
+interface StoreRef {
+  id: string
+  name: string
+}
+
+interface ScrapDataRow {
+  id: string
+  location: string
+  damage_code: string
+  damage_description: string
+}
+
 function ScrapForm({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: () => void }) {
   const { user } = useAuth()
   const { isOnline, addToSyncQueue } = useConnection()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     store_id: '',
-    items: [] as any[],
+    items: [] as ScrapItem[],
   })
-  const [stores, setStores] = useState<any[]>([])
-  const [scrapData, setScrapData] = useState<any[]>([])
-
-  useEffect(() => {
-    loadReferenceData()
-  }, [])
+  const [stores, setStores] = useState<StoreRef[]>([])
+  const [scrapData, setScrapData] = useState<ScrapDataRow[]>([])
 
   const loadReferenceData = async () => {
     const { data: storesData } = await supabase.from('stores').select('*')
@@ -134,6 +161,13 @@ function ScrapForm({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: (
     setStores(storesData || [])
     setScrapData(scrapDataList || [])
   }
+
+  useEffect(() => {
+    // Mount-only data load; deferred so state updates run after the effect.
+    queueMicrotask(() => {
+      void loadReferenceData()
+    })
+  }, [])
 
   const addItem = () => {
     const newItem = {
@@ -147,7 +181,7 @@ function ScrapForm({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: (
     setFormData({ ...formData, items: [...formData.items, newItem] })
   }
 
-  const updateItem = (index: number, field: string, value: any) => {
+  const updateItem = (index: number, field: string, value: string | number) => {
     const updatedItems = [...formData.items]
     updatedItems[index] = { ...updatedItems[index], [field]: value }
     setFormData({ ...formData, items: updatedItems })
@@ -236,7 +270,7 @@ function ScrapForm({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: (
             </div>
 
             {formData.items.length === 0 ? (
-              <p className="text-sm text-gray-500">No items added yet. Click "Add Item" to start.</p>
+              <p className="text-sm text-gray-500">No items added yet. Click &quot;Add Item&quot; to start.</p>
             ) : (
               <div className="space-y-4">
                 {formData.items.map((item, index) => (

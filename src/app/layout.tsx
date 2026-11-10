@@ -5,7 +5,6 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ConnectionProvider } from "@/contexts/ConnectionContext";
 import { BluetoothProvider } from "@/contexts/BluetoothContext";
 import ConnectionStatus from "@/components/ConnectionStatus";
-import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,7 +18,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Zuri LMS",
-  description: "Tire Inspection and Fleet Management System",
+  description:
+    "Community edition — self-hosted tyre inspection and fleet logistics for small fleets. MIT licensed.",
 };
 
 export default function RootLayout({
@@ -39,7 +39,6 @@ export default function RootLayout({
             <AuthProvider>{children}</AuthProvider>
           </BluetoothProvider>
         </ConnectionProvider>
-        <Analytics />
       </body>
     </html>
   );

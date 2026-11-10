@@ -1,19 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables')
-}
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-})
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the requesting user is an admin
-    const { data: adminUser, error: adminError } = await supabaseAdmin
+    const { data: adminUser, error: adminError } = await supabaseAdmin()
       .from('users')
       .select('role')
       .eq('id', adminId)
@@ -35,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Reject the user
-    const { error } = await supabaseAdmin
+    const { error } = await supabaseAdmin()
       .from('users')
       .update({
         approval_status: 'rejected',
@@ -50,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

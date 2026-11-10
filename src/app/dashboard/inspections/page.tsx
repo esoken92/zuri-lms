@@ -8,12 +8,17 @@ import { useBluetooth } from '@/contexts/BluetoothContext'
 import { saveToSyncQueue } from '@/lib/offlineSync'
 import BluetoothPanel from '@/components/BluetoothPanel'
 
+interface InspectionRow {
+  id: string
+  inspection_date: string
+  user_name: string | null
+  location: string | null
+  vehicles?: unknown[]
+}
+
 export default function InspectionsPage() {
-  const { user } = useAuth()
-  const { isOnline, addToSyncQueue } = useConnection()
-  const { currentReading } = useBluetooth()
   const [showForm, setShowForm] = useState(false)
-  const [inspections, setInspections] = useState<any[]>([])
+  const [inspections, setInspections] = useState<InspectionRow[]>([])
   const [loading, setLoading] = useState(false)
 
   const loadInspections = async () => {
@@ -32,7 +37,11 @@ export default function InspectionsPage() {
   }
 
   useEffect(() => {
-    loadInspections()
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadInspections()
+    })
   }, [])
 
   if (showForm) {
@@ -115,6 +124,33 @@ export default function InspectionsPage() {
   )
 }
 
+interface TireEntry {
+  position: number
+  brand: string
+  pattern: string
+  treadDepth: string
+  condition: string
+  pressure: string
+  notes: string
+}
+
+interface VehicleEntry {
+  id: number
+  registration: string
+  vehicleConfig: string
+  tires: TireEntry[]
+}
+
+interface CompanyRef {
+  id: string
+  name: string
+}
+
+interface DepotRef {
+  id: string
+  location: string
+}
+
 function InspectionForm({ onCancel, onSuccess }: { onCancel: () => void; onSuccess: () => void }) {
   const { user } = useAuth()
   const { isOnline, addToSyncQueue } = useConnection()
@@ -125,15 +161,10 @@ function InspectionForm({ onCancel, onSuccess }: { onCancel: () => void; onSucce
     location: '',
     company_id: '',
     depot_id: '',
-    vehicles: [] as any[],
+    vehicles: [] as VehicleEntry[],
   })
-  const [companies, setCompanies] = useState<any[]>([])
-  const [depots, setDepots] = useState<any[]>([])
-  const [showVehicleForm, setShowVehicleForm] = useState(false)
-
-  useEffect(() => {
-    loadReferenceData()
-  }, [])
+  const [companies, setCompanies] = useState<CompanyRef[]>([])
+  const [depots, setDepots] = useState<DepotRef[]>([])
 
   const loadReferenceData = async () => {
     const { data: companiesData } = await supabase.from('companies').select('*')
@@ -141,6 +172,13 @@ function InspectionForm({ onCancel, onSuccess }: { onCancel: () => void; onSucce
     setCompanies(companiesData || [])
     setDepots(depotsData || [])
   }
+
+  useEffect(() => {
+    // Mount-only data load; deferred so state updates run after the effect.
+    queueMicrotask(() => {
+      void loadReferenceData()
+    })
+  }, [])
 
   const addVehicle = () => {
     const newVehicle = {
@@ -160,13 +198,13 @@ function InspectionForm({ onCancel, onSuccess }: { onCancel: () => void; onSucce
     setFormData({ ...formData, vehicles: [...formData.vehicles, newVehicle] })
   }
 
-  const updateVehicle = (index: number, field: string, value: any) => {
+  const updateVehicle = (index: number, field: string, value: string) => {
     const updatedVehicles = [...formData.vehicles]
     updatedVehicles[index] = { ...updatedVehicles[index], [field]: value }
     setFormData({ ...formData, vehicles: updatedVehicles })
   }
 
-  const updateTire = (vehicleIndex: number, tireIndex: number, field: string, value: any) => {
+  const updateTire = (vehicleIndex: number, tireIndex: number, field: string, value: string) => {
     const updatedVehicles = [...formData.vehicles]
     updatedVehicles[vehicleIndex].tires[tireIndex] = {
       ...updatedVehicles[vehicleIndex].tires[tireIndex],
@@ -309,7 +347,7 @@ function InspectionForm({ onCancel, onSuccess }: { onCancel: () => void; onSucce
             </div>
 
             {formData.vehicles.length === 0 ? (
-              <p className="text-sm text-gray-500">No vehicles added yet. Click "Add Vehicle" to start.</p>
+              <p className="text-sm text-gray-500">No vehicles added yet. Click &quot;Add Vehicle&quot; to start.</p>
             ) : (
               <div className="space-y-6">
                 {formData.vehicles.map((vehicle, vIndex) => (
@@ -350,7 +388,7 @@ function InspectionForm({ onCancel, onSuccess }: { onCancel: () => void; onSucce
 
                     <h5 className="text-sm font-medium text-gray-700 mb-3">Tires</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {vehicle.tires.map((tire: any, tIndex: number) => (
+                      {vehicle.tires.map((tire, tIndex) => (
                         <div key={tIndex} className="bg-white p-3 rounded border">
                           <div className="flex justify-between items-center mb-2">
                             <div className="text-xs font-medium text-gray-500">Position {tIndex + 1}</div>

@@ -11,19 +11,19 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { user, loading, signOut } = useAuth()
+  const { user, role, loading, signOut } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/')
+      router.push('/login')
     }
   }, [user, loading, router])
 
   const handleSignOut = async () => {
     await signOut()
-    router.push('/')
+    router.push('/login')
   }
 
   if (loading) {
@@ -45,6 +45,9 @@ export default function DashboardLayout({
     { name: 'Reports', href: '/dashboard/reports', icon: '📈' },
     { name: 'Analytics', href: '/dashboard/analytics', icon: '📉' },
     { name: 'Settings', href: '/dashboard/settings', icon: '⚙️' },
+    ...(role === 'admin'
+      ? [{ name: 'Admin Panel', href: '/admin', icon: '🛡️' }]
+      : []),
   ]
 
   return (

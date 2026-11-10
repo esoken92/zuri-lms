@@ -3,9 +3,22 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface DepotRow {
+  id: string
+  location: string
+  contact_name?: string | null
+  phone?: string | null
+  companies?: { name: string } | null
+}
+
+interface CompanyRef {
+  id: string
+  name: string
+}
+
 export default function DepotsPage() {
-  const [depots, setDepots] = useState<any[]>([])
-  const [companies, setCompanies] = useState<any[]>([])
+  const [depots, setDepots] = useState<DepotRow[]>([])
+  const [companies, setCompanies] = useState<CompanyRef[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
 
@@ -26,7 +39,11 @@ export default function DepotsPage() {
   }
 
   useEffect(() => {
-    loadData()
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadData()
+    })
   }, [])
 
   if (showForm) {
@@ -57,7 +74,7 @@ export default function DepotsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {depots.map((depot: any) => (
+              {depots.map((depot) => (
                 <tr key={depot.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{depot.location}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{depot.contact_name}</td>
@@ -73,7 +90,7 @@ export default function DepotsPage() {
   )
 }
 
-function DepotForm({ onCancel, onSuccess, companies }: { onCancel: () => void; onSuccess: () => void; companies: any[] }) {
+function DepotForm({ onCancel, onSuccess, companies }: { onCancel: () => void; onSuccess: () => void; companies: CompanyRef[] }) {
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     location: '',

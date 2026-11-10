@@ -2,17 +2,33 @@
 
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 type DataType = 'companies' | 'tyres' | 'depots' | 'vehicle-configs' | 'stores' | 'countries' | 'provinces' | 'regions' | 'scrap_data'
+
+interface UserProfile {
+  username?: string
+  role?: string
+}
+
+interface ExtendedProfile {
+  first_name?: string
+  last_name?: string
+  phone?: string
+}
+
+interface ExistingRow {
+  id: string
+  [key: string]: unknown
+}
 
 export default function SettingsPage() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
   const [loadingData, setLoadingData] = useState(true)
-  const [userData, setUserData] = useState<any>(null)
-  const [extendedData, setExtendedData] = useState<any>(null)
+  const [userData, setUserData] = useState<UserProfile | null>(null)
+  const [extendedData, setExtendedData] = useState<ExtendedProfile | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'data' | 'account'>('profile')
@@ -25,7 +41,7 @@ export default function SettingsPage() {
   
   // Data management state
   const [viewMode, setViewMode] = useState<'import' | 'view' | 'add'>('import')
-  const [existingData, setExistingData] = useState<any[]>([])
+  const [existingData, setExistingData] = useState<ExistingRow[]>([])
   const [loadingExistingData, setLoadingExistingData] = useState(false)
   const [singleEntry, setSingleEntry] = useState<Record<string, string>>({})
   const [addingEntry, setAddingEntry] = useState(false)
@@ -33,17 +49,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/')
+      router.push('/login')
     }
   }, [user, loading, router])
 
-  useEffect(() => {
-    if (user) {
-      loadUserData()
-    }
-  }, [user])
-
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     setLoadingData(true)
     
     // Get user data
@@ -63,16 +73,16 @@ export default function SettingsPage() {
     setUserData(userRecord)
     setExtendedData(extendedRecord)
     setLoadingData(false)
-  }
+  }, [user])
 
   // Check if user has admin/management role
-  const canManageData = () => {
+  const canManageData = useCallback(() => {
     const role = userData?.role?.toLowerCase()
     return role === 'admin' || role === 'management' || role === 'administrator'
-  }
+  }, [userData])
 
   // Load existing data for selected type
-  const loadExistingData = async () => {
+  const loadExistingData = useCallback(async () => {
     setLoadingExistingData(true)
     try {
       let tableName = ''
@@ -102,14 +112,25 @@ export default function SettingsPage() {
     } finally {
       setLoadingExistingData(false)
     }
-  }
+  }, [selectedType])
+
+  useEffect(() => {
+    if (user) {
+      // Load profile after mount; deferred so state updates run after the effect.
+      queueMicrotask(() => {
+        void loadUserData()
+      })
+    }
+  }, [user, loadUserData])
 
   // Load data when type or view mode changes
   useEffect(() => {
     if (viewMode === 'view' && canManageData()) {
-      loadExistingData()
+      queueMicrotask(() => {
+        void loadExistingData()
+      })
     }
-  }, [selectedType, viewMode])
+  }, [viewMode, canManageData, loadExistingData])
 
   // Add single entry
   const handleAddEntry = async (e: React.FormEvent) => {
@@ -124,7 +145,7 @@ export default function SettingsPage() {
 
     try {
       let tableName = ''
-      const entryData: any = {}
+      const entryData: Record<string, unknown> = {}
 
       switch (selectedType) {
         case 'companies':
@@ -260,7 +281,7 @@ export default function SettingsPage() {
 
   const handleSignOut = async () => {
     await signOut()
-    router.push('/')
+    router.push('/login')
   }
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -300,7 +321,6 @@ export default function SettingsPage() {
     setMessage('')
 
     const formData = new FormData(e.currentTarget as HTMLFormElement)
-    const currentPassword = formData.get('currentPassword') as string
     const newPassword = formData.get('newPassword') as string
     const confirmPassword = formData.get('confirmPassword') as string
 
@@ -325,15 +345,15 @@ export default function SettingsPage() {
   }
 
   // Data import functions
-  const parseCSV = (text: string): any[] => {
+  const parseCSV = (text: string): Record<string, string>[] => {
     const lines = text.split('\n')
     const headers = lines[0].split(',').map(h => h.trim())
-    const data = []
+    const data: Record<string, string>[] = []
 
     for (let i = 1; i < lines.length; i++) {
       if (lines[i].trim()) {
         const values = lines[i].split(',').map(v => v.trim())
-        const obj: any = {}
+        const obj: Record<string, string> = {}
         headers.forEach((header, index) => {
           obj[header] = values[index] || ''
         })
@@ -344,9 +364,9 @@ export default function SettingsPage() {
     return data
   }
 
-  const parseJSON = (text: string): any[] => {
+  const parseJSON = (text: string): Record<string, string>[] => {
     try {
-      const parsed = JSON.parse(text)
+      const parsed = JSON.parse(text) as Record<string, string> | Record<string, string>[]
       return Array.isArray(parsed) ? parsed : [parsed]
     } catch {
       return []
@@ -368,7 +388,7 @@ export default function SettingsPage() {
 
     try {
       const text = await file.text()
-      let data: any[] = []
+      let data: Record<string, string>[] = []
 
       if (file.name.endsWith('.csv')) {
         data = parseCSV(text)

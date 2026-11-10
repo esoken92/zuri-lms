@@ -1,20 +1,19 @@
 import { supabase } from './supabase'
-import { useConnection } from '@/contexts/ConnectionContext'
 
 export interface SyncItem {
   id: string
   type: 'inspection' | 'scrap' | 'user'
-  data: any
+  data: Record<string, unknown>
   timestamp: string
 }
 
 export async function syncData() {
-  const syncQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]')
-  
+  const syncQueue: SyncItem[] = JSON.parse(localStorage.getItem('syncQueue') || '[]')
+
   if (syncQueue.length === 0) return { success: true, synced: 0 }
 
   let synced = 0
-  const errors: any[] = []
+  const errors: { item: SyncItem; error: unknown }[] = []
 
   for (const item of syncQueue) {
     try {
@@ -56,7 +55,7 @@ export async function syncData() {
   return { success: errors.length === 0, synced, errors }
 }
 
-export function saveToSyncQueue(type: 'inspection' | 'scrap' | 'user', data: any) {
+export function saveToSyncQueue(type: 'inspection' | 'scrap' | 'user', data: Record<string, unknown>) {
   const syncQueue = JSON.parse(localStorage.getItem('syncQueue') || '[]')
   const newItem: SyncItem = {
     id: `${Date.now()}-${Math.random()}`,

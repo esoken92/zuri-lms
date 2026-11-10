@@ -3,7 +3,7 @@
 import { useBluetooth } from '@/contexts/BluetoothContext'
 
 export default function BluetoothPanel() {
-  const { isSupported, connectedDevice, isScanning, scanDevices, connect, disconnect, currentReading } = useBluetooth()
+  const { isSupported, connectedDevice, isScanning, scanDevices, disconnect, currentReading } = useBluetooth()
 
   if (!isSupported) {
     return null

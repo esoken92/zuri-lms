@@ -1,21 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import UserForm from '@/components/admin/UserForm'
 import { useToast, ToastContainer } from '@/components/ui/Toast'
+import { User } from '@/types'
+
+const pageSize = 20
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<any[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
-  const pageSize = 20
   const { toasts, addToast, removeToast } = useToast()
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true)
     
     // Get current user ID once
@@ -52,7 +54,7 @@ export default function UsersPage() {
       setUsers(data || [])
     }
     setLoading(false)
-  }
+  }, [page])
 
   const approveUser = async (userId: string) => {
     const { error } = await supabase
@@ -92,8 +94,12 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    loadUsers()
-  }, [page])
+    // Data load on mount and page change; deferred so the loader's
+    // synchronous setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadUsers()
+    })
+  }, [loadUsers])
 
   if (showForm) {
     return <UserForm onCancel={() => setShowForm(false)} onSuccess={loadUsers} />

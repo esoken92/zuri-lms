@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import { Country, Province, Region, Store } from '@/types'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -28,24 +29,10 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
 
   // Geographic data
-  const [countries, setCountries] = useState<any[]>([])
-  const [provinces, setProvinces] = useState<any[]>([])
-  const [regions, setRegions] = useState<any[]>([])
-  const [stores, setStores] = useState<any[]>([])
-
-  useEffect(() => {
-    loadGeographicData()
-  }, [])
-
-  useEffect(() => {
-    if (countryId) {
-      loadProvinces(countryId)
-      loadStores(countryId)
-    } else {
-      setProvinces([])
-      setStores([])
-    }
-  }, [countryId])
+  const [countries, setCountries] = useState<Country[]>([])
+  const [provinces, setProvinces] = useState<Province[]>([])
+  const [regions, setRegions] = useState<Region[]>([])
+  const [stores, setStores] = useState<Store[]>([])
 
   const loadGeographicData = async () => {
     const [countriesData, regionsData, storesData] = await Promise.all([
@@ -69,6 +56,28 @@ export default function RegisterPage() {
     setStores(data || [])
   }
 
+  useEffect(() => {
+    // Mount-only data load; deferred so state updates run after the effect.
+    queueMicrotask(() => {
+      void loadGeographicData()
+    })
+  }, [])
+
+  useEffect(() => {
+    // Deferred so the loads/resets run after the effect, not inside it.
+    if (countryId) {
+      queueMicrotask(() => {
+        void loadProvinces(countryId)
+        void loadStores(countryId)
+      })
+    } else {
+      queueMicrotask(() => {
+        setProvinces([])
+        setStores([])
+      })
+    }
+  }, [countryId])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -89,7 +98,7 @@ export default function RegisterPage() {
       security_answer_2: securityAnswer2
     }
 
-    const { error, requiresApproval } = await signUp(email, password, username, 'inspector', profileData)
+    const { error } = await signUp(email, password, username, 'inspector', profileData)
 
     if (error) {
       setError(error.message)
@@ -277,8 +286,8 @@ export default function RegisterPage() {
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
               >
                 <option value="">Select Question</option>
-                <option value="What was your first pet's name?">What was your first pet's name?</option>
-                <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+                <option value="What was your first pet's name?">What was your first pet&apos;s name?</option>
+                <option value="What is your mother's maiden name?">What is your mother&apos;s maiden name?</option>
                 <option value="What city were you born in?">What city were you born in?</option>
                 <option value="What is the name of your favorite teacher?">What is the name of your favorite teacher?</option>
               </select>
@@ -349,7 +358,7 @@ export default function RegisterPage() {
             </button>
           </div>
           <div className="text-center">
-            <a href="/" className="text-sm text-blue-600 hover:text-blue-500">
+            <a href="/login" className="text-sm text-blue-600 hover:text-blue-500">
               Already have an account? Sign in
             </a>
           </div>

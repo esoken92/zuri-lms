@@ -3,8 +3,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface Suggestion {
+  id: string
+  username: string | null
+  created_at: string
+  status: string | null
+  suggestion_type: string | null
+  suggestion_data: unknown
+  admin_notes: string | null
+}
+
 export default function SuggestionsPage() {
-  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadSuggestions = async () => {
@@ -23,7 +33,11 @@ export default function SuggestionsPage() {
   }
 
   useEffect(() => {
-    loadSuggestions()
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadSuggestions()
+    })
   }, [])
 
   const updateStatus = async (id: string, status: string, adminNotes: string) => {
@@ -71,7 +85,7 @@ export default function SuggestionsPage() {
   )
 }
 
-function SuggestionCard({ suggestion, onUpdate }: { suggestion: any; onUpdate: (id: string, status: string, notes: string) => void }) {
+function SuggestionCard({ suggestion, onUpdate }: { suggestion: Suggestion; onUpdate: (id: string, status: string, notes: string) => void }) {
   const [adminNotes, setAdminNotes] = useState(suggestion.admin_notes || '')
   const [showNotes, setShowNotes] = useState(false)
 

@@ -3,15 +3,29 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+// `type` (not `interface`) so the rows get an implicit index signature and
+// stay assignable to Record<string, unknown> for exportToCSV.
+type InspectionReportRow = {
+  id: string
+  inspection_date: string
+  user_name: string | null
+  location: string | null
+  vehicles?: unknown[]
+}
+
+type ScrapReportRow = {
+  id: string
+  created_at: string
+  user_name: string | null
+  items?: unknown[]
+  status: string | null
+}
+
 export default function ReportsPage() {
-  const [inspections, setInspections] = useState<any[]>([])
-  const [scraps, setScraps] = useState<any[]>([])
+  const [inspections, setInspections] = useState<InspectionReportRow[]>([])
+  const [scraps, setScraps] = useState<ScrapReportRow[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedReport, setSelectedReport] = useState<'inspections' | 'scraps' | null>(null)
-
-  useEffect(() => {
-    loadData()
-  }, [])
 
   const loadData = async () => {
     setLoading(true)
@@ -29,7 +43,15 @@ export default function ReportsPage() {
     setLoading(false)
   }
 
-  const exportToCSV = (data: any[], filename: string) => {
+  useEffect(() => {
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadData()
+    })
+  }, [])
+
+  const exportToCSV = (data: Record<string, unknown>[], filename: string) => {
     if (data.length === 0) {
       alert('No data to export')
       return

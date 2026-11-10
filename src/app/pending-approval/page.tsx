@@ -33,7 +33,7 @@ export default function PendingApprovalPage() {
         </div>
 
         <button
-          onClick={() => router.push('/')}
+          onClick={() => router.push('/login')}
           className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
         >
           Return to Login

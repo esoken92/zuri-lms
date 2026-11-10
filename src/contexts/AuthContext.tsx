@@ -5,12 +5,21 @@ import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { hashString } from '@/lib/crypto'
 
+// Error values surfaced to callers: AuthError, PostgrestError, or Error —
+// all expose `message`, which is what the forms render.
+interface AuthActionResult {
+  error: { message: string } | null
+  user?: User
+  requiresApproval?: boolean
+}
+
 interface AuthContextType {
   user: User | null
   session: Session | null
+  role: string | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<{ error: any, requiresApproval?: boolean }>
-  signUp: (email: string, password: string, username: string, role: string, profileData?: any) => Promise<{ error: any, user?: User, requiresApproval?: boolean }>
+  signIn: (email: string, password: string) => Promise<AuthActionResult>
+  signUp: (email: string, password: string, username: string, role: string, profileData?: Record<string, unknown>) => Promise<AuthActionResult>
   signOut: () => Promise<void>
 }
 
@@ -19,26 +28,44 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
+  const [role, setRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let cancelled = false
+
+    async function applySession(session: Session | null) {
       setSession(session)
       setUser(session?.user ?? null)
-      setLoading(false)
+      if (session?.user) {
+        const { data } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+        if (!cancelled) setRole(data?.role ?? null)
+      } else {
+        setRole(null)
+      }
+      if (!cancelled) setLoading(false)
+    }
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      applySession(session)
     })
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
+      applySession(session)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
@@ -83,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null }
   }
 
-  const signUp = async (email: string, password: string, username: string, role: string, profileData?: any) => {
+  const signUp = async (email: string, password: string, username: string, role: string, profileData?: Record<string, unknown>) => {
     // First sign up with Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -94,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Then create user record in our users table
     if (data.user) {
-      const userData: any = {
+      const userData: Record<string, unknown> = {
         id: data.user.id,
         username,
         role,
@@ -116,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (profileData[field] !== undefined) {
             // Hash security answers before storage
             if (field === 'security_answer_1' || field === 'security_answer_2') {
-              userData[field] = await hashString(profileData[field])
+              userData[field] = await hashString(String(profileData[field]))
             } else {
               userData[field] = profileData[field]
             }
@@ -143,7 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, role, loading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   )

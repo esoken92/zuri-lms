@@ -12,9 +12,42 @@ export interface SensorReading {
   treadDepth?: number
 }
 
+// Minimal Web Bluetooth typings — lib.dom doesn't ship them and
+// @types/web-bluetooth isn't installed.
+interface WebBluetoothCharacteristic extends EventTarget {
+  startNotifications(): Promise<WebBluetoothCharacteristic>
+  readValue(): Promise<DataView>
+}
+
+interface WebBluetoothService {
+  getCharacteristic(name: string): Promise<WebBluetoothCharacteristic>
+}
+
+interface WebBluetoothGattServer {
+  getPrimaryService(name: string): Promise<WebBluetoothService>
+}
+
+interface WebBluetoothDevice {
+  id: string
+  name?: string
+  gatt: {
+    connect(): Promise<WebBluetoothGattServer>
+  }
+}
+
+interface WebBluetoothNavigator extends Navigator {
+  bluetooth: {
+    requestDevice(options: {
+      acceptAllDevices?: boolean
+      filters?: { name?: string }[]
+      optionalServices?: string[]
+    }): Promise<WebBluetoothDevice>
+  }
+}
+
 class BluetoothService {
   private device: BluetoothDevice | null = null
-  private characteristic: any = null
+  private characteristic: WebBluetoothCharacteristic | null = null
   private listeners: ((reading: SensorReading) => void)[] = []
 
   async isSupported(): Promise<boolean> {
@@ -27,7 +60,7 @@ class BluetoothService {
     }
 
     try {
-      const device = await (navigator as any).bluetooth.requestDevice({
+      const device = await (navigator as WebBluetoothNavigator).bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: ['battery_service', 'heart_rate']
       })
@@ -37,7 +70,7 @@ class BluetoothService {
         name: device.name || 'Unknown Device',
         connected: false
       }]
-    } catch (error) {
+    } catch {
       throw new Error('Failed to scan devices')
     }
   }
@@ -48,7 +81,7 @@ class BluetoothService {
     }
 
     try {
-      const device = await (navigator as any).bluetooth.requestDevice({
+      const device = await (navigator as WebBluetoothNavigator).bluetooth.requestDevice({
         filters: [{ name: deviceId }],
         optionalServices: ['battery_service', 'heart_rate']
       })
@@ -68,10 +101,10 @@ class BluetoothService {
         // Start notifications
         await this.characteristic.startNotifications()
         this.characteristic.addEventListener('characteristicvaluechanged', this.handleCharacteristicValueChanged)
-      } catch (error) {
+      } catch {
         console.log('Could not connect to standard service, device may use custom protocol')
       }
-    } catch (error) {
+    } catch {
       throw new Error('Failed to connect to device')
     }
   }
@@ -88,8 +121,8 @@ class BluetoothService {
     }
   }
 
-  private handleCharacteristicValueChanged = (event: any) => {
-    const value = event.target.value
+  private handleCharacteristicValueChanged = (event: Event) => {
+    const value = (event.target as EventTarget & { value: DataView }).value
     const reading: SensorReading = {
       deviceId: this.device?.id || '',
       timestamp: new Date().toISOString(),

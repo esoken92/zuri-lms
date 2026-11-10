@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { getActivityLogs } from '@/lib/activityLog'
+import { ActivityLog } from '@/types'
 
 export default function ActivityLogsPage() {
-  const [logs, setLogs] = useState<any[]>([])
+  const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
 
@@ -17,7 +17,11 @@ export default function ActivityLogsPage() {
   }
 
   useEffect(() => {
-    loadLogs()
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadLogs()
+    })
   }, [])
 
   const filteredLogs = filter === 'all' 

@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface ActivityEntry {
+  id: string
+  activity_type: string
+  activity_description: string
+  created_at: string
+}
+
 export default function DashboardPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -14,19 +21,20 @@ export default function DashboardPage() {
     pendingScraps: 0,
     activeUsers: 0
   })
-  const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [recentActivity, setRecentActivity] = useState<ActivityEntry[]>([])
   const [statsLoading, setStatsLoading] = useState(true)
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/')
+      router.push('/login')
     }
   }, [user, loading, router])
 
   useEffect(() => {
     if (user) {
-      // Don't auto-load data - let user refresh manually to avoid slow initial load
-      setStatsLoading(false)
+      // Don't auto-load data - let user refresh manually to avoid slow initial load.
+      // Deferred so the state update runs after the effect, not inside it.
+      queueMicrotask(() => setStatsLoading(false))
     }
   }, [user])
 

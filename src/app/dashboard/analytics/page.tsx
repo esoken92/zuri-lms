@@ -2,23 +2,50 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/contexts/AuthContext'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
-export default function AnalyticsPage() {
-  const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [inspectionData, setInspectionData] = useState<any[]>([])
-  const [scrapData, setScrapData] = useState<any[]>([])
-  const [tireHealthData, setTireHealthData] = useState<any[]>([])
+interface InspectionTireRow {
+  condition?: string
+  treadDepth?: string | number
+}
 
-  useEffect(() => {
-    loadAnalyticsData()
-  }, [])
+interface InspectionVehicleRow {
+  tires?: InspectionTireRow[]
+}
+
+interface InspectionAnalyticsRow {
+  created_at: string
+  vehicles?: InspectionVehicleRow[]
+}
+
+interface ScrapAnalyticsRow {
+  created_at: string
+  status?: string
+  items?: unknown[]
+}
+
+interface TrendPoint {
+  date: string
+  inspections?: number
+  scraps?: number
+  vehicles?: number
+  items?: number
+}
+
+interface TireHealthPoint {
+  name: string
+  value: number
+}
+
+export default function AnalyticsPage() {
+  const [loading, setLoading] = useState(true)
+  const [inspectionData, setInspectionData] = useState<TrendPoint[]>([])
+  const [scrapData, setScrapData] = useState<TrendPoint[]>([])
+  const [tireHealthData, setTireHealthData] = useState<TireHealthPoint[]>([])
 
   const loadAnalyticsData = async () => {
     setLoading(true)
-    
+
     // Get inspection data for trends
     const { data: inspections } = await supabase
       .from('inspections')
@@ -33,33 +60,37 @@ export default function AnalyticsPage() {
       .order('created_at', { ascending: true })
       .limit(30)
 
+    const inspectionRows = (inspections || []) as InspectionAnalyticsRow[]
+    const scrapRows = (scraps || []) as ScrapAnalyticsRow[]
+
     // Calculate tire health from inspections
-    const tireHealth = inspections?.flatMap((insp: any) => 
-      insp.vehicles?.flatMap((v: any) => 
-        v.tires?.map((t: any) => ({
+    const tireHealth = inspectionRows.flatMap((insp) =>
+      insp.vehicles?.flatMap((v) =>
+        v.tires?.map((t) => ({
           condition: t.condition,
-          treadDepth: parseFloat(t.treadDepth) || 0
+          treadDepth: parseFloat(String(t.treadDepth)) || 0
         }))
       ) || []
     )
 
     // Process inspection trend data
-    const inspectionTrend = inspections?.map((insp: any) => ({
+    const inspectionTrend = inspectionRows.map((insp) => ({
       date: new Date(insp.created_at).toLocaleDateString(),
       inspections: 1,
       vehicles: insp.vehicles?.length || 0
-    })) || []
+    }))
 
     // Process scrap trend data
-    const scrapTrend = scraps?.map((scrap: any) => ({
+    const scrapTrend = scrapRows.map((scrap) => ({
       date: new Date(scrap.created_at).toLocaleDateString(),
       scraps: 1,
       items: scrap.items?.length || 0
-    })) || []
+    }))
 
     // Process tire health distribution
-    const conditionCounts = tireHealth?.reduce((acc: any, t: any) => {
-      acc[t.condition] = (acc[t.condition] || 0) + 1
+    const conditionCounts = tireHealth.reduce<Record<string, number>>((acc, t) => {
+      const key = String(t!.condition)
+      acc[key] = (acc[key] || 0) + 1
       return acc
     }, {})
 
@@ -73,6 +104,14 @@ export default function AnalyticsPage() {
     setTireHealthData(tireHealthDistribution)
     setLoading(false)
   }
+
+  useEffect(() => {
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadAnalyticsData()
+    })
+  }, [])
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
@@ -157,25 +196,25 @@ export default function AnalyticsPage() {
             <div className="flex justify-between items-center p-3 bg-green-50 rounded">
               <span className="text-green-800 font-medium">Good Condition</span>
               <span className="text-green-800 font-bold">
-                {tireHealthData.find((t: any) => t.name === 'good')?.value || 0}
+                {tireHealthData.find((t) => t.name === 'good')?.value || 0}
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-yellow-50 rounded">
               <span className="text-yellow-800 font-medium">Fair Condition</span>
               <span className="text-yellow-800 font-bold">
-                {tireHealthData.find((t: any) => t.name === 'fair')?.value || 0}
+                {tireHealthData.find((t) => t.name === 'fair')?.value || 0}
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-orange-50 rounded">
               <span className="text-orange-800 font-medium">Poor Condition</span>
               <span className="text-orange-800 font-bold">
-                {tireHealthData.find((t: any) => t.name === 'poor')?.value || 0}
+                {tireHealthData.find((t) => t.name === 'poor')?.value || 0}
               </span>
             </div>
             <div className="flex justify-between items-center p-3 bg-red-50 rounded">
               <span className="text-red-800 font-medium">Needs Replacement</span>
               <span className="text-red-800 font-bold">
-                {tireHealthData.find((t: any) => t.name === 'replace')?.value || 0}
+                {tireHealthData.find((t) => t.name === 'replace')?.value || 0}
               </span>
             </div>
           </div>

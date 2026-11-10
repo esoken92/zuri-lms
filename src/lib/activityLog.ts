@@ -4,7 +4,7 @@ export async function logActivity(
   action: string,
   entityType?: string,
   entityId?: string,
-  details?: any
+  details?: Record<string, unknown>
 ) {
   try {
     const { data: { user } } = await supabase.auth.getUser()

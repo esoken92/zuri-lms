@@ -3,8 +3,19 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface TyreRow {
+  id: string
+  brand: string
+  pattern?: string | null
+  section_width?: string | null
+  aspect_ratio?: string | null
+  rim_size?: string | null
+  tread_depth?: number | null
+  product_code?: string | null
+}
+
 export default function TyresPage() {
-  const [tyres, setTyres] = useState<any[]>([])
+  const [tyres, setTyres] = useState<TyreRow[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
 
@@ -24,7 +35,11 @@ export default function TyresPage() {
   }
 
   useEffect(() => {
-    loadTyres()
+    // Mount-only data load; defer so the loader's synchronous
+    // setLoading(true) runs after the effect, not inside it.
+    queueMicrotask(() => {
+      void loadTyres()
+    })
   }, [])
 
   if (showForm) {

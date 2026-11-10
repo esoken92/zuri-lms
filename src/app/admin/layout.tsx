@@ -11,19 +11,22 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { user, loading, signOut } = useAuth()
+  const { user, role, loading, signOut } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/')
+    if (loading) return
+    if (!user) {
+      router.push('/login')
+    } else if (role !== 'admin') {
+      router.push('/dashboard')
     }
-  }, [user, loading, router])
+  }, [user, role, loading, router])
 
   const handleSignOut = async () => {
     await signOut()
-    router.push('/')
+    router.push('/login')
   }
 
   if (loading) {
@@ -34,7 +37,7 @@ export default function AdminLayout({
     )
   }
 
-  if (!user) {
+  if (!user || role !== 'admin') {
     return null
   }
 

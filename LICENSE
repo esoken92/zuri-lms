@@ -1,19 +1,21 @@
-ZURI_LMS – Proprietary License Agreement  
-Copyright © 2025 Kurt Jonathan. All Rights Reserved.
+MIT License
 
-ZURI_LMS is the proprietary and confidential property of Kurt Jonathan. It is a comprehensive Logistics Company Management System designed to support operations such as tire inspection, inventory tracking, dispatch management, vehicle scheduling, and enterprise reporting.
+Copyright (c) 2026 Kurt Jonathan / ESO Industries
 
-This Software and its associated files may not be copied, modified, distributed, reverse-engineered, or used in any form, whole or in part, without the prior written permission of the copyright holder.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-This Software is provided “AS IS” without warranty of any kind, either expressed or implied. In no event shall the author be held liable for any claim, damages, or other liability arising from the use of the software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-You may NOT:
-- Use this software in production or development without a license
-- Share or sublicense the code or binaries
-- Modify or create derivative works
-- Upload this software to any public or private repositories
-
-Contact for Licensing:
-Kurt Jonathan  
-📧 esoken92@gmail.com  
-📍 South Africa  
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
