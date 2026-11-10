@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 const FEATURES = [
   {
     title: "Tyre inspections",
@@ -42,18 +40,12 @@ export default function Home() {
           Zuri LMS
         </span>
         <nav className="flex items-center gap-2">
-          <Link
-            href="/login"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-hot-curry-800 hover:bg-hot-curry-100"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/register"
+          <a
+            href="https://github.com/esoken92/zuri-lms"
             className="rounded-md bg-hot-curry-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-hot-curry-800"
           >
-            Get started
-          </Link>
+            Get the code on GitHub
+          </a>
         </nav>
       </header>
 
@@ -70,20 +62,25 @@ export default function Home() {
             reports, free to run for a small fleet. Same bones as the full
             platform, MIT licensed, deployable in an afternoon.
           </p>
-          <div className="mt-8 flex gap-3">
-            <Link
-              href="/register"
-              className="rounded-md bg-hot-curry-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-hot-curry-800"
-            >
-              Set up your fleet
-            </Link>
+          <div className="mt-8 flex items-center gap-3">
             <a
               href="https://github.com/esoken92/zuri-lms"
+              className="rounded-md bg-hot-curry-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-hot-curry-800"
+            >
+              Clone it on GitHub
+            </a>
+            <a
+              href="https://github.com/esoken92/zuri-lms#quickstart"
               className="rounded-md border border-hot-curry-300 px-5 py-2.5 text-sm font-semibold text-hot-curry-800 hover:bg-hot-curry-100"
             >
-              View on GitHub
+              See the quickstart
             </a>
           </div>
+          <p className="mt-6 max-w-xl text-sm text-hot-curry-900/60">
+            This site is the pitch, not the app. There is nothing to sign up
+            for here — the code lives on GitHub. Clone it, point it at a free
+            Supabase project, and it&apos;s running.
+          </p>
         </section>
 
         <section className="grid gap-4 pb-16 sm:grid-cols-2 lg:grid-cols-3">

@@ -2,6 +2,10 @@
 
 **Open-source tyre inspection and fleet logistics for small fleets — self-hosted, MIT licensed, no telemetry.**
 
+> 🌐 **[zuri-lms.vercel.app](https://zuri-lms.vercel.app)** — the marketing
+> page. It's a pitch, not a running app: to actually use Zuri LMS you clone
+> this repo and point it at your own Supabase project (quickstart below).
+
 This is a slice of the full Zuri platform: the parts a depot actually needs
 day to day, packaged so anyone can clone it, point it at a free Supabase
 project, and run it for real. If the mini covers your fleet, you never
