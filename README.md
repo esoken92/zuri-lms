@@ -4,6 +4,10 @@
 
 # Zuri LMS — Community Edition
 
+![license](https://img.shields.io/github/license/esoken92/zuri-lms)
+![top language](https://img.shields.io/github/languages/top/esoken92/zuri-lms)
+![last commit](https://img.shields.io/github/last-commit/esoken92/zuri-lms)
+
 </div>
 
 **Open-source tyre inspection and fleet logistics for small fleets — self-hosted, MIT licensed, no telemetry.**
